@@ -23,12 +23,8 @@ export async function PATCH(
 
   if (!authorised) {
     return NextResponse.json(
-      {
-        error: "Editing access is required.",
-      },
-      {
-        status: 401,
-      }
+      { error: "Editing access is required." },
+      { status: 401 }
     );
   }
 
@@ -43,12 +39,8 @@ export async function PATCH(
     body = await request.json();
   } catch {
     return NextResponse.json(
-      {
-        error: "Invalid request body.",
-      },
-      {
-        status: 400,
-      }
+      { error: "Invalid request body." },
+      { status: 400 }
     );
   }
 
@@ -61,30 +53,24 @@ export async function PATCH(
 
   if (typeof completed !== "boolean") {
     return NextResponse.json(
-      {
-        error: "A valid completed value is required.",
-      },
-      {
-        status: 400,
-      }
+      { error: "A valid completed value is required." },
+      { status: 400 }
     );
   }
 
   /*
    * 3. FIND EXISTING TASK
    *
-   * We keep the original completed_at value so that,
-   * if anything later fails, we can restore the task
-   * exactly as it was before the request.
+   * Keep the previous state so that if a later
+   * operation fails, the task can be restored
+   * exactly as it was.
    */
   const {
     data: existingTask,
     error: taskLookupError,
   } = await supabaseServer
     .from("urgent_tasks")
-    .select(
-      "id, area_id, completed, completed_at"
-    )
+    .select("id, area_id, completed, completed_at")
     .eq("id", taskId)
     .maybeSingle();
 
@@ -95,36 +81,33 @@ export async function PATCH(
     );
 
     return NextResponse.json(
-      {
-        error: "The urgent task could not be checked.",
-      },
-      {
-        status: 500,
-      }
+      { error: "The urgent task could not be checked." },
+      { status: 500 }
     );
   }
 
   if (!existingTask) {
     return NextResponse.json(
-      {
-        error: "Urgent task not found.",
-      },
-      {
-        status: 404,
-      }
+      { error: "Urgent task not found." },
+      { status: 404 }
     );
   }
 
   /*
-   * 4. IF REOPENING THE TASK, CHECK THE AREA STATUS
+   * 4. IF REOPENING, CHECK THE FEATURE STATUS
    *
-   * Reopening a task means the area once again has
-   * an unresolved issue.
+   * Normal areas:
+   * Blue / Green → Being Prepared
    *
-   * If the area is Blue or Green, it must return
-   * to Amber.
+   * Infrastructure:
+   * Blue / Green → Laid / Installed
    */
-  let shouldResetAreaToPreparing = false;
+  let shouldResetAreaStatus = false;
+
+  let rollbackStatus:
+    | "laid"
+    | "preparing"
+    | null = null;
 
   if (!completed) {
     const {
@@ -132,7 +115,7 @@ export async function PATCH(
       error: areaError,
     } = await supabaseServer
       .from("site_areas")
-      .select("id, status")
+      .select("id, status, area_type")
       .eq("id", existingTask.area_id)
       .maybeSingle();
 
@@ -147,24 +130,27 @@ export async function PATCH(
           error:
             "The site's progress status could not be checked.",
         },
-        {
-          status: 500,
-        }
+        { status: 500 }
       );
     }
 
     if (!area) {
       return NextResponse.json(
-        {
-          error: "Site area not found.",
-        },
-        {
-          status: 404,
-        }
+        { error: "Site area not found." },
+        { status: 404 }
       );
     }
 
-    shouldResetAreaToPreparing =
+    const isInfrastructure =
+      area.area_type === "fence" ||
+      area.area_type === "rubber_tracking" ||
+      area.area_type === "metal_tracking";
+
+    rollbackStatus = isInfrastructure
+      ? "laid"
+      : "preparing";
+
+    shouldResetAreaStatus =
       area.status === "ready_for_inspection" ||
       area.status === "completed";
   }
@@ -172,10 +158,9 @@ export async function PATCH(
   /*
    * 5. UPDATE TASK
    */
-  const newCompletedAt =
-    completed
-      ? new Date().toISOString()
-      : null;
+  const newCompletedAt = completed
+    ? new Date().toISOString()
+    : null;
 
   const {
     data: updatedTask,
@@ -198,26 +183,31 @@ export async function PATCH(
     );
 
     return NextResponse.json(
-      {
-        error: "The urgent task could not be updated.",
-      },
-      {
-        status: 500,
-      }
+      { error: "The urgent task could not be updated." },
+      { status: 500 }
     );
   }
 
   /*
-   * 6. IF THE TASK WAS REOPENED WHILE THE AREA
-   *    WAS BLUE OR GREEN, RESET THE AREA TO AMBER.
+   * 6. IF REOPENED WHILE BLUE / GREEN,
+   *    ROLLBACK THE FEATURE STATUS
+   *
+   * Normal area:
+   * → preparing
+   *
+   * Infrastructure:
+   * → laid
    */
-  if (shouldResetAreaToPreparing) {
+  if (
+    shouldResetAreaStatus &&
+    rollbackStatus
+  ) {
     const {
       error: statusError,
     } = await supabaseServer
       .from("site_areas")
       .update({
-        status: "preparing",
+        status: rollbackStatus,
         updated_at: new Date().toISOString(),
       })
       .eq("id", existingTask.area_id);
@@ -229,11 +219,11 @@ export async function PATCH(
       );
 
       /*
-       * The task update succeeded but the required
-       * status rollback failed.
+       * The urgent task update succeeded but the
+       * required site status rollback failed.
        *
-       * Restore the task exactly to its previous state
-       * so we do not leave the system inconsistent.
+       * Restore the task to its exact previous state
+       * so the database does not become inconsistent.
        */
       const {
         error: restoreError,
@@ -258,21 +248,21 @@ export async function PATCH(
           error:
             "The urgent task could not be reopened because the area status could not be reset.",
         },
-        {
-          status: 500,
-        }
+        { status: 500 }
       );
     }
   }
 
+  /*
+   * 7. SUCCESS
+   */
   return NextResponse.json({
     success: true,
     task: updatedTask,
-    areaStatusChanged:
-      shouldResetAreaToPreparing,
+    areaStatusChanged: shouldResetAreaStatus,
     areaStatus:
-      shouldResetAreaToPreparing
-        ? "preparing"
+      shouldResetAreaStatus
+        ? rollbackStatus
         : null,
   });
 }
@@ -291,12 +281,8 @@ export async function DELETE(
 
   if (!authorised) {
     return NextResponse.json(
-      {
-        error: "Editing access is required.",
-      },
-      {
-        status: 401,
-      }
+      { error: "Editing access is required." },
+      { status: 401 }
     );
   }
 
@@ -321,23 +307,15 @@ export async function DELETE(
     );
 
     return NextResponse.json(
-      {
-        error: "The urgent task could not be checked.",
-      },
-      {
-        status: 500,
-      }
+      { error: "The urgent task could not be checked." },
+      { status: 500 }
     );
   }
 
   if (!existingTask) {
     return NextResponse.json(
-      {
-        error: "Urgent task not found.",
-      },
-      {
-        status: 404,
-      }
+      { error: "Urgent task not found." },
+      { status: 404 }
     );
   }
 
@@ -358,12 +336,8 @@ export async function DELETE(
     );
 
     return NextResponse.json(
-      {
-        error: "The urgent task could not be removed.",
-      },
-      {
-        status: 500,
-      }
+      { error: "The urgent task could not be removed." },
+      { status: 500 }
     );
   }
 

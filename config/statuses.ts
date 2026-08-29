@@ -53,6 +53,17 @@ export function getStatusLabel(
       return "Marquee Laid";
     }
 
+    if (
+      areaType === "rubber_tracking" ||
+      areaType === "metal_tracking"
+    ) {
+      return "Tracking Laid";
+    }
+
+    if (areaType === "fence") {
+      return "Fence Installed";
+    }
+
     return "Area Established";
   }
 

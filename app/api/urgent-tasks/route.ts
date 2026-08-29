@@ -65,18 +65,22 @@ export async function POST(request: Request) {
     );
   }
 
+  const cleanAreaId = areaId.trim();
   const cleanTaskText = taskText.trim();
 
   /*
-   * 3. MAKE SURE AREA EXISTS
+   * 3. MAKE SURE AREA / FEATURE EXISTS
+   *
+   * area_type is also loaded so infrastructure
+   * can use a different rollback status.
    */
   const {
     data: area,
     error: areaError,
   } = await supabaseServer
     .from("site_areas")
-    .select("id, status")
-    .eq("id", areaId)
+    .select("id, status, area_type")
+    .eq("id", cleanAreaId)
     .maybeSingle();
 
   if (areaError) {
@@ -99,6 +103,24 @@ export async function POST(request: Request) {
   }
 
   /*
+   * Infrastructure has no "Being Prepared" stage.
+   *
+   * If an urgent issue is added while Blue or Green:
+   *
+   * Infrastructure → Laid / Installed
+   * Normal area    → Being Prepared
+   */
+  const isInfrastructure =
+    area.area_type === "fence" ||
+    area.area_type === "rubber_tracking" ||
+    area.area_type === "metal_tracking";
+
+  const rollbackStatus =
+    isInfrastructure
+      ? "laid"
+      : "preparing";
+
+  /*
    * 4. CREATE URGENT TASK
    */
   const {
@@ -107,7 +129,7 @@ export async function POST(request: Request) {
   } = await supabaseServer
     .from("urgent_tasks")
     .insert({
-      area_id: areaId,
+      area_id: cleanAreaId,
       task_text: cleanTaskText,
       completed: false,
       completed_at: null,
@@ -129,8 +151,14 @@ export async function POST(request: Request) {
   }
 
   /*
-   * 5. BLUE / GREEN AREAS WITH A NEW ISSUE
-   *    AUTOMATICALLY RETURN TO AMBER.
+   * 5. BLUE / GREEN FEATURES WITH A NEW ISSUE
+   *    AUTOMATICALLY ROLLBACK.
+   *
+   * Normal areas:
+   * Blue / Green → Amber
+   *
+   * Infrastructure:
+   * Blue / Green → Yellow
    */
   let areaStatusChanged = false;
 
@@ -142,10 +170,10 @@ export async function POST(request: Request) {
       await supabaseServer
         .from("site_areas")
         .update({
-          status: "preparing",
+          status: rollbackStatus,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", areaId);
+        .eq("id", cleanAreaId);
 
     if (statusError) {
       console.error(
@@ -154,8 +182,9 @@ export async function POST(request: Request) {
       );
 
       /*
-       * Remove the task again so we don't leave the system
-       * in an inconsistent Blue/Green + urgent-task state.
+       * Remove the newly-created task so the system
+       * cannot remain Blue/Green with an unresolved
+       * urgent issue.
        */
       const { error: rollbackTaskError } =
         await supabaseServer
@@ -182,13 +211,16 @@ export async function POST(request: Request) {
     areaStatusChanged = true;
   }
 
+  /*
+   * 6. SUCCESS
+   */
   return NextResponse.json({
     success: true,
     task,
     areaStatusChanged,
     areaStatus:
       areaStatusChanged
-        ? "preparing"
+        ? rollbackStatus
         : area.status,
   });
 }

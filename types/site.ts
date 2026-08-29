@@ -5,12 +5,22 @@ export type SiteStatus =
   | "ready_for_inspection"
   | "completed";
 
+export type InfrastructureType =
+  | "fence"
+  | "rubber_tracking"
+  | "metal_tracking";
+
 export type AreaType =
   | "marquee"
   | "cabin"
   | "service_pad"
   | "site_yard"
-  | "other";
+  | "other"
+  | InfrastructureType;
+
+export type GeometryType =
+  | "polygon"
+  | "line";
 
 export interface SiteArea {
   id: string;
@@ -18,6 +28,7 @@ export interface SiteArea {
   type: AreaType;
   points: string;
   status: SiteStatus;
+  geometry?: GeometryType;
 }
 
 export interface MapPoint {

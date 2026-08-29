@@ -5,6 +5,12 @@ import { supabaseServer } from "@/lib/supabaseServer";
 
 import type { SiteStatus } from "@/types/site";
 
+interface RouteContext {
+  params: Promise<{
+    areaId: string;
+  }>;
+}
+
 const VALID_STATUSES: SiteStatus[] = [
   "not_started",
   "laid",
@@ -13,13 +19,10 @@ const VALID_STATUSES: SiteStatus[] = [
   "completed",
 ];
 
-interface RouteContext {
-  params: Promise<{
-    areaId: string;
-  }>;
-}
-
-export async function PATCH(request: Request, context: RouteContext) {
+export async function PATCH(
+  request: Request,
+  context: RouteContext
+) {
   /*
    * 1. AUTHORISATION
    */
@@ -32,11 +35,20 @@ export async function PATCH(request: Request, context: RouteContext) {
     );
   }
 
-  /*
-   * 2. READ REQUEST
-   */
   const { areaId } = await context.params;
 
+  if (!areaId?.trim()) {
+    return NextResponse.json(
+      { error: "A valid site area is required." },
+      { status: 400 }
+    );
+  }
+
+  const cleanAreaId = areaId.trim();
+
+  /*
+   * 2. READ + VALIDATE REQUEST
+   */
   let body: unknown;
 
   try {
@@ -48,22 +60,25 @@ export async function PATCH(request: Request, context: RouteContext) {
     );
   }
 
-  const status =
-    typeof body === "object" &&
-    body !== null &&
-    "status" in body
-      ? (body as { status?: unknown }).status
-      : undefined;
+  if (
+    typeof body !== "object" ||
+    body === null ||
+    !("status" in body)
+  ) {
+    return NextResponse.json(
+      { error: "A valid progress status is required." },
+      { status: 400 }
+    );
+  }
 
-  /*
-   * 3. VALIDATE STATUS
-   */
+  const status = (body as { status?: unknown }).status;
+
   if (
     typeof status !== "string" ||
     !VALID_STATUSES.includes(status as SiteStatus)
   ) {
     return NextResponse.json(
-      { error: "Invalid site status." },
+      { error: "A valid progress status is required." },
       { status: 400 }
     );
   }
@@ -71,16 +86,25 @@ export async function PATCH(request: Request, context: RouteContext) {
   const newStatus = status as SiteStatus;
 
   /*
-   * 4. MAKE SURE AREA EXISTS
+   * 3. MAKE SURE FEATURE EXISTS
+   *
+   * We also retrieve area_type so infrastructure can
+   * follow its own four-stage progress workflow.
    */
-  const { data: existingArea, error: areaError } = await supabaseServer
+  const {
+    data: area,
+    error: areaError,
+  } = await supabaseServer
     .from("site_areas")
-    .select("id, name, status, area_type")
-    .eq("id", areaId)
+    .select("id, name, area_type, status")
+    .eq("id", cleanAreaId)
     .maybeSingle();
 
   if (areaError) {
-    console.error("Failed to retrieve site area:", areaError);
+    console.error(
+      "Failed to retrieve site area:",
+      areaError
+    );
 
     return NextResponse.json(
       { error: "The site area could not be checked." },
@@ -88,7 +112,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     );
   }
 
-  if (!existingArea) {
+  if (!area) {
     return NextResponse.json(
       { error: "Site area not found." },
       { status: 404 }
@@ -96,51 +120,83 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 
   /*
-   * 5. BLOCK READY FOR INSPECTION AND FULL COMPLETION
-   *    WHILE URGENT TASKS REMAIN
+   * 4. DETERMINE WHETHER THIS IS INFRASTRUCTURE
+   */
+  const isInfrastructure =
+    area.area_type === "fence" ||
+    area.area_type === "rubber_tracking" ||
+    area.area_type === "metal_tracking";
+
+  /*
+   * Infrastructure has no "Being Prepared" stage.
    *
-   * An area with unresolved urgent tasks may remain:
+   * Its workflow is:
    *
-   * Grey  - Not Started
-   * Yellow - Laid / Established
-   * Amber - Being Prepared
+   * Not Started
+   * → Tracking Laid / Fence Installed
+   * → Ready for Inspection
+   * → Fully Completed
    *
-   * But it may NOT become:
-   *
-   * Blue  - Ready for Inspection
-   * Green - Fully Completed
+   * This is enforced server-side as well as hidden
+   * from the UI.
+   */
+  if (
+    isInfrastructure &&
+    newStatus === "preparing"
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          "Infrastructure does not use the Being Prepared stage.",
+      },
+      { status: 400 }
+    );
+  }
+
+  /*
+   * 5. BLUE / GREEN CANNOT HAVE AN
+   *    UNRESOLVED URGENT ISSUE
    */
   if (
     newStatus === "ready_for_inspection" ||
     newStatus === "completed"
   ) {
-    const { count, error: urgentTaskError } = await supabaseServer
+    const {
+      count: unresolvedUrgentCount,
+      error: urgentError,
+    } = await supabaseServer
       .from("urgent_tasks")
-      .select("*", {
+      .select("id", {
         count: "exact",
         head: true,
       })
-      .eq("area_id", areaId)
+      .eq("area_id", cleanAreaId)
       .eq("completed", false);
 
-    if (urgentTaskError) {
-      console.error("Failed to check urgent tasks:", urgentTaskError);
+    if (urgentError) {
+      console.error(
+        "Failed to check urgent tasks:",
+        urgentError
+      );
 
       return NextResponse.json(
-        { error: "Outstanding urgent tasks could not be checked." },
+        {
+          error:
+            "Urgent issues could not be checked before updating progress.",
+        },
         { status: 500 }
       );
     }
 
-    if ((count ?? 0) > 0) {
-      const blockedStatus =
-        newStatus === "completed"
-          ? "fully completed"
-          : "ready for inspection";
-
+    if (
+      (unresolvedUrgentCount ?? 0) > 0
+    ) {
       return NextResponse.json(
         {
-          error: `Complete all urgent tasks before marking this area ${blockedStatus}.`,
+          error:
+            newStatus === "completed"
+              ? "This area cannot be marked Fully Completed while urgent issues remain unresolved."
+              : "This area cannot be marked Ready for Inspection while urgent issues remain unresolved.",
         },
         { status: 409 }
       );
@@ -148,27 +204,28 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 
   /*
-   * 6. FULL COMPLETION REQUIRES ALL EQUIPMENT
+   * 6. GREEN EQUIPMENT CHECK
    *
-   * IMPORTANT:
+   * Normal site areas must have every recorded
+   * equipment requirement physically received AND
+   * manually confirmed before reaching Green.
    *
-   * Missing equipment does NOT prevent an area from
-   * becoming Blue / Ready for Inspection.
-   *
-   * However, every recorded equipment requirement must
-   * be fully on site AND manually confirmed before the
-   * area can become Green / Fully Completed.
+   * Infrastructure has no equipment workflow, so
+   * this check is skipped completely for lines.
    */
-  if (newStatus === "completed") {
+  if (
+    newStatus === "completed" &&
+    !isInfrastructure
+  ) {
     const {
       data: equipmentRequirements,
       error: equipmentError,
     } = await supabaseServer
       .from("equipment_requirements")
       .select(
-        "id, item_name, quantity_required, quantity_received, completed"
+        "id, quantity_required, quantity_received, completed"
       )
-      .eq("area_id", areaId);
+      .eq("area_id", cleanAreaId);
 
     if (equipmentError) {
       console.error(
@@ -177,29 +234,27 @@ export async function PATCH(request: Request, context: RouteContext) {
       );
 
       return NextResponse.json(
-        { error: "Equipment requirements could not be checked." },
+        {
+          error:
+            "Equipment requirements could not be checked before updating progress.",
+        },
         { status: 500 }
       );
     }
 
-    const incompleteEquipment = (equipmentRequirements ?? []).filter(
-      (equipment) =>
-        equipment.quantity_received < equipment.quantity_required ||
-        !equipment.completed
-    );
+    const incompleteEquipment =
+      equipmentRequirements?.filter(
+        (item) =>
+          item.quantity_received <
+            item.quantity_required ||
+          !item.completed
+      ) ?? [];
 
     if (incompleteEquipment.length > 0) {
       return NextResponse.json(
         {
           error:
-            "All required equipment must be on site and confirmed before this area can be marked fully completed.",
-          incompleteEquipment: incompleteEquipment.map((equipment) => ({
-            id: equipment.id,
-            itemName: equipment.item_name,
-            quantityRequired: equipment.quantity_required,
-            quantityReceived: equipment.quantity_received,
-            completed: equipment.completed,
-          })),
+            "This area cannot be marked Fully Completed until all equipment requirements have been received and confirmed.",
         },
         { status: 409 }
       );
@@ -207,23 +262,34 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
 
   /*
-   * 7. UPDATE DATABASE
+   * 7. UPDATE STATUS
    */
-  const { data: updatedArea, error: updateError } = await supabaseServer
+  const {
+    data: updatedArea,
+    error: updateError,
+  } = await supabaseServer
     .from("site_areas")
     .update({
       status: newStatus,
       updated_at: new Date().toISOString(),
     })
-    .eq("id", areaId)
-    .select("id, name, status, area_type, updated_at")
+    .eq("id", cleanAreaId)
+    .select(
+      "id, name, area_type, status, updated_at"
+    )
     .single();
 
   if (updateError) {
-    console.error("Failed to update site area:", updateError);
+    console.error(
+      "Failed to update site area status:",
+      updateError
+    );
 
     return NextResponse.json(
-      { error: "The progress update could not be saved." },
+      {
+        error:
+          "The progress update could not be saved.",
+      },
       { status: 500 }
     );
   }
@@ -234,5 +300,5 @@ export async function PATCH(request: Request, context: RouteContext) {
   return NextResponse.json({
     success: true,
     area: updatedArea,
-  }); 
+  });
 }
