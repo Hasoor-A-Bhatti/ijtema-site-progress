@@ -72,8 +72,11 @@ export default function MapToolbar({
 
   return (
     <div className="grid gap-2 border-b bg-white px-3 py-2 md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-center">
-      {/* ZOOM CONTROLS */}
-      <div className="flex items-center gap-2">
+      {/* ZOOM CONTROLS
+          Hidden on phones.
+          Mobile users can pinch to zoom and drag to pan.
+      */}
+      <div className="hidden items-center gap-2 sm:flex">
         <button
           type="button"
           onClick={onZoomIn}
