@@ -1,37 +1,14 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-
 import { useEditorAccess } from "./EditorAccessProvider";
 
 export default function EditorStatusControl() {
-  const { canEdit, loading, unlock, lock } = useEditorAccess();
-
-  const [showUnlock, setShowUnlock] = useState(false);
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-
-  async function handleUnlock(event: FormEvent) {
-    event.preventDefault();
-
-    if (!password.trim()) return;
-
-    setSubmitting(true);
-    setError("");
-
-    const result = await unlock(password);
-
-    setSubmitting(false);
-
-    if (!result.success) {
-      setError(result.error ?? "Incorrect password.");
-      return;
-    }
-
-    setPassword("");
-    setShowUnlock(false);
-  }
+  const {
+    canEdit,
+    loading,
+    lock,
+    requestEditingAccess,
+  } = useEditorAccess();
 
   if (loading) {
     return (
@@ -41,92 +18,61 @@ export default function EditorStatusControl() {
     );
   }
 
-  return (
-    <>
-      {canEdit ? (
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 rounded-full bg-green-50 px-3 py-1.5 text-sm font-medium text-green-700">
-            <span className="h-2 w-2 rounded-full bg-green-500" />
-            Editing Enabled
-          </div>
+  if (canEdit) {
+    return (
+      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 rounded-full bg-green-50 px-3 py-1.5 text-sm font-medium text-green-700">
+          <span className="h-2 w-2 rounded-full bg-green-500" />
 
-          <button
-            type="button"
-            onClick={() => void lock()}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          >
-            Lock
-          </button>
+          <span className="hidden sm:inline">
+            Editing Enabled
+          </span>
+
+          <span className="sm:hidden">
+            Editing
+          </span>
         </div>
-      ) : (
+
         <button
           type="button"
-          onClick={() => setShowUnlock(true)}
-          className="flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
+          onClick={() => void lock()}
+          className="min-h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 active:bg-slate-100"
         >
-          <span>🔒</span>
-          View Only
+          Lock
         </button>
-      )}
+      </div>
+    );
+  }
 
-      {showUnlock && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-lg font-semibold text-slate-900">
-                  Enable Editing
-                </h2>
+  return (
+    <button
+      type="button"
+      onClick={() => requestEditingAccess()}
+      className="flex min-h-10 items-center gap-2 rounded-full bg-slate-100 px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-200 active:bg-slate-300"
+    >
+      {/* LOCK ICON */}
+      <svg
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+        className="h-4 w-4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+      >
+        <rect
+          x="5"
+          y="10"
+          width="14"
+          height="10"
+          rx="2"
+        />
 
-                <p className="mt-1 text-sm text-slate-500">
-                  Enter the authorised site-team password.
-                </p>
-              </div>
+        <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+      </svg>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setShowUnlock(false);
-                  setPassword("");
-                  setError("");
-                }}
-                className="flex h-9 w-9 items-center justify-center rounded-lg text-xl text-slate-500 hover:bg-slate-100"
-              >
-                ×
-              </button>
-            </div>
-
-            <form onSubmit={handleUnlock} className="mt-5">
-              <input
-                type="password"
-                autoFocus
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="Editing password"
-                className="min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-base text-slate-900 placeholder:text-slate-400 outline-none focus:border-slate-600"
-              />
-
-              {error && (
-                <p className="mt-2 text-sm font-medium text-red-600">
-                  {error}
-                </p>
-              )}
-
-              <button
-                type="submit"
-                disabled={submitting || !password.trim()}
-                className="mt-4 min-h-11 w-full rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white disabled:opacity-40"
-              >
-                {submitting ? "Checking..." : "Enable Editing"}
-              </button>
-
-              <p className="mt-3 text-center text-xs text-slate-400">
-                Editing access automatically expires after 30 minutes.
-              </p>
-            </form>
-          </div>
-        </div>
-      )}
-    </>
+      <span className="hidden sm:inline">
+        View Only
+      </span>
+    </button>
   );
 }
