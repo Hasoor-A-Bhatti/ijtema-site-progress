@@ -371,7 +371,13 @@ export default function DashboardOverlay({
         </header>
 
         {/* CONFERENCE STRIP */}
-        <div className="border-b border-slate-200 bg-slate-50 px-4 py-3 sm:px-6">
+        <div
+  className={`border-b border-slate-200 bg-slate-50 px-4 py-3 sm:px-6 ${
+    activeTab === "summary"
+      ? "hidden sm:block"
+      : "block"
+  }`}
+>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
             {/* SITE PROGRESS */}
             <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
