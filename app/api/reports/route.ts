@@ -1,62 +1,162 @@
-import { NextResponse } from "next/server";
-
-import { hasValidEditorSession } from "@/lib/auth/requireEditorSession";
 import {
-  countCompletedReportFields,
-  getReportDeadline,
-  getReportStatus,
-  isValidReportDate,
-  REPORT_FIELD_COUNT,
-} from "@/lib/reports/reportUtils";
+  NextRequest,
+  NextResponse,
+} from "next/server";
+
 import { supabaseServer } from "@/lib/supabaseServer";
 
 import type {
   DepartmentReport,
-  ReportDepartment,
   ReportStatus,
 } from "@/types/reports";
 
-export async function GET(
-  request: Request
-) {
-  /*
-   * 1. AUTHORISATION
-   */
-  const authorised =
-    await hasValidEditorSession();
+export const dynamic = "force-dynamic";
 
-  if (!authorised) {
-    return NextResponse.json(
-      {
-        error:
-          "Editing access is required.",
-      },
-      {
-        status: 401,
-      }
+const TIME_ZONE = "Europe/London";
+const REPORT_FIELDS = 7;
+
+interface DepartmentRow {
+  id: string;
+  name: string;
+  nazim_name: string;
+  sort_order: number;
+  active: boolean;
+}
+
+function validDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+}
+
+function londonDate(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+
+  const values = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value])
+  );
+
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function timezoneOffset(date: Date) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+
+  const values = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, Number(part.value)])
+  );
+
+  const representedAsUtc = Date.UTC(
+    values.year,
+    values.month - 1,
+    values.day,
+    values.hour,
+    values.minute,
+    values.second
+  );
+
+  return representedAsUtc - date.getTime();
+}
+
+function reportDeadline(reportDate: string) {
+  const [year, month, day] =
+    reportDate.split("-").map(Number);
+
+  const wallTime = new Date(
+    Date.UTC(year, month - 1, day, 20, 0, 0)
+  );
+
+  let offset = timezoneOffset(wallTime);
+
+  let result = new Date(
+    wallTime.getTime() - offset
+  );
+
+  const correctedOffset = timezoneOffset(result);
+
+  if (correctedOffset !== offset) {
+    offset = correctedOffset;
+
+    result = new Date(
+      wallTime.getTime() - offset
     );
   }
 
-  /*
-   * 2. REPORT DATE
-   */
-  const url =
-    new URL(request.url);
+  return result;
+}
 
-  const reportDate =
-    url.searchParams.get(
-      "date"
-    );
+function reportStatus(
+  report: DepartmentReport | null,
+  deadline: Date,
+  now: Date
+): ReportStatus {
+  if (report?.submitted_at) {
+    return new Date(report.submitted_at).getTime() <=
+      new Date(report.deadline_at ?? deadline).getTime()
+      ? "completed"
+      : "late";
+  }
 
-  if (
-    !isValidReportDate(
-      reportDate
-    )
-  ) {
+  return now.getTime() > deadline.getTime()
+    ? "overdue"
+    : "pending";
+}
+
+function completedFields(
+  report: DepartmentReport | null
+) {
+  if (!report) return 0;
+
+  let count = 0;
+
+  if (report.team_members_on_site !== null) count++;
+  if (report.total_manhours !== null) count++;
+
+  if (report.todays_activities?.trim()) count++;
+  if (report.incidents_delays?.trim()) count++;
+  if (report.work_proposed_tomorrow?.trim()) count++;
+  if (report.additional_comments?.trim()) count++;
+  if (report.signature_name_aims_id?.trim()) count++;
+
+  return count;
+}
+
+export async function GET(
+  request: NextRequest
+) {
+  const requestedDate =
+    request.nextUrl.searchParams.get("date") ??
+    londonDate();
+
+  if (!validDate(requestedDate)) {
     return NextResponse.json(
       {
-        error:
-          "A valid report date is required.",
+        error: "Invalid report date.",
       },
       {
         status: 400,
@@ -64,38 +164,33 @@ export async function GET(
     );
   }
 
-  /*
-   * 3. LOAD DEPARTMENTS
-   */
-  const {
-    data: departments,
-    error:
-      departmentsError,
-  } = await supabaseServer
-    .from(
-      "report_departments"
-    )
-    .select("*")
-    .eq("active", true)
-    .order(
-      "sort_order",
-      {
-        ascending: true,
-      }
-    );
+  const [departmentsResult, reportsResult] =
+    await Promise.all([
+      supabaseServer
+        .from("report_departments")
+        .select(
+          "id,name,nazim_name,sort_order,active"
+        )
+        .eq("active", true)
+        .order("sort_order", {
+          ascending: true,
+        }),
 
-  if (
-    departmentsError
-  ) {
+      supabaseServer
+        .from("department_reports")
+        .select("*")
+        .eq("report_date", requestedDate),
+    ]);
+
+  if (departmentsResult.error) {
     console.error(
-      "Failed to load reporting departments:",
-      departmentsError
+      "Report departments:",
+      departmentsResult.error
     );
 
     return NextResponse.json(
       {
-        error:
-          "Reporting departments could not be loaded.",
+        error: "Departments could not be loaded.",
       },
       {
         status: 500,
@@ -103,34 +198,15 @@ export async function GET(
     );
   }
 
-  /*
-   * 4. LOAD REPORTS FOR DATE
-   */
-  const {
-    data: reports,
-    error: reportsError,
-  } = await supabaseServer
-    .from(
-      "department_reports"
-    )
-    .select("*")
-    .eq(
-      "report_date",
-      reportDate
-    );
-
-  if (
-    reportsError
-  ) {
+  if (reportsResult.error) {
     console.error(
-      "Failed to load department reports:",
-      reportsError
+      "Department reports:",
+      reportsResult.error
     );
 
     return NextResponse.json(
       {
-        error:
-          "Site reports could not be loaded.",
+        error: "Reports could not be loaded.",
       },
       {
         status: 500,
@@ -138,108 +214,97 @@ export async function GET(
     );
   }
 
-  const now =
-    new Date();
+  const departments =
+    (departmentsResult.data ?? []) as DepartmentRow[];
 
-  const defaultDeadline =
-    getReportDeadline(
-      reportDate
-    );
+  const reports =
+    (reportsResult.data ?? []) as DepartmentReport[];
 
-  const reportMap =
-    new Map(
-      (
-        reports as DepartmentReport[]
-      ).map(
-        (report) => [
-          report.department_id,
-          report,
-        ]
-      )
-    );
+  const reportMap = new Map(
+    reports.map((report) => [
+      report.department_id,
+      report,
+    ])
+  );
 
-  const states =
-    (
-      departments as ReportDepartment[]
-    ).map(
-      (department) => {
-        const report =
-          reportMap.get(
-            department.id
-          ) ?? null;
+  const now = new Date();
+  const defaultDeadline = reportDeadline(requestedDate);
 
-        const deadline =
-          report
-            ? new Date(
-                report.deadline_at
-              )
-            : defaultDeadline;
+  const departmentStates = departments.map(
+    (department) => {
+      const report =
+        reportMap.get(department.id) ?? null;
 
-        return {
-          department,
-          report,
-          status:
-            getReportStatus(
-              report,
-              deadline,
-              now
-            ),
-          completedFields:
-            countCompletedReportFields(
-              report
-            ),
-          totalFields:
-            REPORT_FIELD_COUNT,
-          deadlineAt:
-            deadline.toISOString(),
-        };
-      }
-    );
+      const deadline = report?.deadline_at
+        ? new Date(report.deadline_at)
+        : defaultDeadline;
 
-  /*
-   * 5. SUMMARY COUNTS
-   */
-  const summary: Record<
-    ReportStatus,
-    number
-  > = {
-    pending: 0,
-    overdue: 0,
-    completed: 0,
-    late: 0,
-  };
+      const status = reportStatus(
+        report,
+        deadline,
+        now
+      );
 
-  states.forEach(
-    (state) => {
-      summary[
-        state.status
-      ] += 1;
+      return {
+        /*
+         * Existing UI-friendly values.
+         */
+        departmentId: department.id,
+        departmentName: department.name,
+        nazimName: department.nazim_name,
+
+        department,
+        report,
+        status,
+
+        completedFields: completedFields(report),
+        totalFields: REPORT_FIELDS,
+      };
     }
   );
 
-  const submitted =
-    summary.completed +
-    summary.late;
+  const pending = departmentStates.filter(
+    (item) => item.status === "pending"
+  ).length;
+
+  const overdue = departmentStates.filter(
+    (item) => item.status === "overdue"
+  ).length;
+
+  const completed = departmentStates.filter(
+    (item) => item.status === "completed"
+  ).length;
+
+  const late = departmentStates.filter(
+    (item) => item.status === "late"
+  ).length;
+
+  const submitted = completed + late;
 
   return NextResponse.json({
     success: true,
 
-    reportDate,
+    reportDate: requestedDate,
+    serverTime: now.toISOString(),
+    deadlineAt: defaultDeadline.toISOString(),
 
-    serverTime:
-      now.toISOString(),
-
-    deadlineAt:
-      defaultDeadline.toISOString(),
-
-    totalDepartments:
-      states.length,
+    totalDepartments: departments.length,
 
     submitted,
+    pending,
+    overdue,
+    completed,
+    late,
 
-    summary,
+    summary: {
+      total: departments.length,
+      submitted,
+      pending,
+      overdue,
+      completed,
+      late,
+    },
 
-    departments:
-      states,
+    departments: departmentStates,
   });
 }

@@ -1,73 +1,301 @@
-import { NextResponse } from "next/server";
-
-import { hasValidEditorSession } from "@/lib/auth/requireEditorSession";
 import {
-  countCompletedReportFields,
-  getReportDeadline,
-  getReportStatus,
-  isValidReportDate,
-  REPORT_FIELD_COUNT,
-  validateReportForm,
-} from "@/lib/reports/reportUtils";
+  NextRequest,
+  NextResponse,
+} from "next/server";
+
 import { supabaseServer } from "@/lib/supabaseServer";
 
 import type {
   DepartmentReport,
-  ReportDepartment,
+  ReportFormValues,
+  ReportStatus,
 } from "@/types/reports";
 
-interface RouteContext {
-  params: Promise<{
-    departmentId: string;
-  }>;
+export const dynamic = "force-dynamic";
+
+const TIME_ZONE = "Europe/London";
+const REPORT_FIELDS = 7;
+
+interface DepartmentRow {
+  id: string;
+  name: string;
+  nazim_name: string;
+  sort_order: number;
+  active: boolean;
 }
 
-/*
- * GET CURRENT REPORT + HISTORY
- */
-export async function GET(
-  request: Request,
-  context: RouteContext
-) {
-  const authorised =
-    await hasValidEditorSession();
+function validDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
 
-  if (!authorised) {
-    return NextResponse.json(
-      {
-        error:
-          "Editing access is required.",
-      },
-      {
-        status: 401,
-      }
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+}
+
+function londonDate(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+
+  const values = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value])
+  );
+
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function timezoneOffset(date: Date) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+
+  const values = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, Number(part.value)])
+  );
+
+  return (
+    Date.UTC(
+      values.year,
+      values.month - 1,
+      values.day,
+      values.hour,
+      values.minute,
+      values.second
+    ) - date.getTime()
+  );
+}
+
+function reportDeadline(reportDate: string) {
+  const [year, month, day] =
+    reportDate.split("-").map(Number);
+
+  const wallTime = new Date(
+    Date.UTC(year, month - 1, day, 20)
+  );
+
+  const offset = timezoneOffset(wallTime);
+
+  let result = new Date(
+    wallTime.getTime() - offset
+  );
+
+  const correctedOffset = timezoneOffset(result);
+
+  if (correctedOffset !== offset) {
+    result = new Date(
+      wallTime.getTime() - correctedOffset
     );
   }
 
-  const {
-    departmentId,
-  } = await context.params;
+  return result;
+}
 
-  const cleanDepartmentId =
-    departmentId.trim();
+function reportStatus(
+  report: DepartmentReport | null,
+  deadline: Date,
+  now = new Date()
+): ReportStatus {
+  if (report?.submitted_at) {
+    return new Date(report.submitted_at).getTime() <=
+      new Date(report.deadline_at ?? deadline).getTime()
+      ? "completed"
+      : "late";
+  }
 
-  const url =
-    new URL(request.url);
+  return now.getTime() > deadline.getTime()
+    ? "overdue"
+    : "pending";
+}
 
-  const reportDate =
-    url.searchParams.get(
-      "date"
-    );
+function countFields(
+  report: DepartmentReport | null
+) {
+  if (!report) return 0;
+
+  let count = 0;
+
+  if (report.team_members_on_site !== null) count++;
+  if (report.total_manhours !== null) count++;
+  if (report.todays_activities?.trim()) count++;
+  if (report.incidents_delays?.trim()) count++;
+  if (report.work_proposed_tomorrow?.trim()) count++;
+  if (report.additional_comments?.trim()) count++;
+  if (report.signature_name_aims_id?.trim()) count++;
+
+  return count;
+}
+
+function normaliseForm(
+  input: unknown
+):
+  | {
+      values: ReportFormValues;
+      error: null;
+    }
+  | {
+      values: null;
+      error: string;
+    } {
+  if (
+    typeof input !== "object" ||
+    input === null
+  ) {
+    return {
+      values: null,
+      error: "Invalid report information.",
+    };
+  }
+
+  const body = input as Record<string, unknown>;
+
+  const team =
+    body.team_members_on_site;
+
+  const manhours =
+    body.total_manhours;
 
   if (
-    !isValidReportDate(
-      reportDate
-    )
+    team !== null &&
+    team !== undefined &&
+    (!Number.isInteger(team) ||
+      (team as number) < 0)
   ) {
+    return {
+      values: null,
+      error:
+        "Team members on site must be a whole number of 0 or more.",
+    };
+  }
+
+  if (
+    manhours !== null &&
+    manhours !== undefined &&
+    (typeof manhours !== "number" ||
+      !Number.isFinite(manhours) ||
+      manhours < 0)
+  ) {
+    return {
+      values: null,
+      error:
+        "Total manhours must be 0 or more.",
+    };
+  }
+
+  const textFields = [
+    "todays_activities",
+    "incidents_delays",
+    "work_proposed_tomorrow",
+    "additional_comments",
+    "signature_name_aims_id",
+  ] as const;
+
+  for (const field of textFields) {
+    if (
+      body[field] !== undefined &&
+      typeof body[field] !== "string"
+    ) {
+      return {
+        values: null,
+        error: "Invalid report text.",
+      };
+    }
+  }
+
+  return {
+    error: null,
+
+    values: {
+      team_members_on_site:
+        team === null || team === undefined
+          ? null
+          : (team as number),
+
+      total_manhours:
+        manhours === null || manhours === undefined
+          ? null
+          : (manhours as number),
+
+      todays_activities:
+        typeof body.todays_activities === "string"
+          ? body.todays_activities.trim()
+          : "",
+
+      incidents_delays:
+        typeof body.incidents_delays === "string"
+          ? body.incidents_delays.trim()
+          : "",
+
+      work_proposed_tomorrow:
+        typeof body.work_proposed_tomorrow === "string"
+          ? body.work_proposed_tomorrow.trim()
+          : "",
+
+      additional_comments:
+        typeof body.additional_comments === "string"
+          ? body.additional_comments.trim()
+          : "",
+
+      signature_name_aims_id:
+        typeof body.signature_name_aims_id === "string"
+          ? body.signature_name_aims_id.trim()
+          : "",
+    },
+  };
+}
+
+async function getDepartment(
+  departmentId: string
+) {
+  return supabaseServer
+    .from("report_departments")
+    .select(
+      "id,name,nazim_name,sort_order,active"
+    )
+    .eq("id", departmentId)
+    .eq("active", true)
+    .maybeSingle();
+}
+
+/*
+ * GET ONE DEPARTMENT REPORT
+ */
+export async function GET(
+  request: NextRequest,
+  context: {
+    params: Promise<{
+      departmentId: string;
+    }>;
+  }
+) {
+  const { departmentId } = await context.params;
+
+  const reportDate =
+    request.nextUrl.searchParams.get("date") ??
+    londonDate();
+
+  if (!validDate(reportDate)) {
     return NextResponse.json(
       {
-        error:
-          "A valid report date is required.",
+        error: "Invalid report date.",
       },
       {
         status: 400,
@@ -75,52 +303,16 @@ export async function GET(
     );
   }
 
-  /*
-   * DEPARTMENT
-   */
-  const {
-    data: department,
-    error:
-      departmentError,
-  } = await supabaseServer
-    .from(
-      "report_departments"
-    )
-    .select("*")
-    .eq(
-      "id",
-      cleanDepartmentId
-    )
-    .eq(
-      "active",
-      true
-    )
-    .maybeSingle();
+  const departmentResult =
+    await getDepartment(departmentId);
 
   if (
-    departmentError
+    departmentResult.error ||
+    !departmentResult.data
   ) {
-    console.error(
-      "Failed to load report department:",
-      departmentError
-    );
-
     return NextResponse.json(
       {
-        error:
-          "The department could not be loaded.",
-      },
-      {
-        status: 500,
-      }
-    );
-  }
-
-  if (!department) {
-    return NextResponse.json(
-      {
-        error:
-          "Reporting department not found.",
+        error: "Department could not be found.",
       },
       {
         status: 404,
@@ -128,39 +320,35 @@ export async function GET(
     );
   }
 
-  /*
-   * SELECTED DATE REPORT
-   */
-  const {
-    data: report,
-    error: reportError,
-  } = await supabaseServer
-    .from(
-      "department_reports"
-    )
-    .select("*")
-    .eq(
-      "department_id",
-      cleanDepartmentId
-    )
-    .eq(
-      "report_date",
-      reportDate
-    )
-    .maybeSingle();
+  const department =
+    departmentResult.data as DepartmentRow;
 
-  if (
-    reportError
-  ) {
-    console.error(
-      "Failed to load department report:",
-      reportError
-    );
+  const [reportResult, historyResult] =
+    await Promise.all([
+      supabaseServer
+        .from("department_reports")
+        .select("*")
+        .eq("department_id", departmentId)
+        .eq("report_date", reportDate)
+        .maybeSingle(),
+
+      supabaseServer
+        .from("department_reports")
+        .select("*")
+        .eq("department_id", departmentId)
+        .lte("report_date", reportDate)
+        .order("report_date", {
+          ascending: false,
+        })
+        .limit(30),
+    ]);
+
+  if (reportResult.error) {
+    console.error(reportResult.error);
 
     return NextResponse.json(
       {
-        error:
-          "The department report could not be loaded.",
+        error: "Report could not be loaded.",
       },
       {
         status: 500,
@@ -168,48 +356,13 @@ export async function GET(
     );
   }
 
-  /*
-   * REPORT HISTORY
-   *
-   * Keep this limited for now.
-   * The UI can display the latest 30 reports.
-   */
-  const {
-    data: history,
-    error: historyError,
-  } = await supabaseServer
-    .from(
-      "department_reports"
-    )
-    .select("*")
-    .eq(
-      "department_id",
-      cleanDepartmentId
-    )
-    .lt(
-      "report_date",
-      reportDate
-    )
-    .order(
-      "report_date",
-      {
-        ascending: false,
-      }
-    )
-    .limit(30);
-
-  if (
-    historyError
-  ) {
-    console.error(
-      "Failed to load report history:",
-      historyError
-    );
+  if (historyResult.error) {
+    console.error(historyResult.error);
 
     return NextResponse.json(
       {
         error:
-          "The department's report history could not be loaded.",
+          "Report history could not be loaded.",
       },
       {
         status: 500,
@@ -217,109 +370,73 @@ export async function GET(
     );
   }
 
-  const now =
-    new Date();
+  const report =
+    (reportResult.data ??
+      null) as DepartmentReport | null;
 
-  const deadline =
-    report
-      ? new Date(
-          report.deadline_at
-        )
-      : getReportDeadline(
-          reportDate
-        );
+  const deadline = report?.deadline_at
+    ? new Date(report.deadline_at)
+    : reportDeadline(reportDate);
 
-  const historyWithStatus =
-    (
-      history as DepartmentReport[]
-    ).map(
-      (historicalReport) => ({
-        report:
-          historicalReport,
-        status:
-          getReportStatus(
-            historicalReport,
-            new Date(
-              historicalReport.deadline_at
-            ),
-            now
-          ),
-      })
-    );
+  const now = new Date();
+
+  const history = (
+    (historyResult.data ??
+      []) as DepartmentReport[]
+  ).map((item) => ({
+    ...item,
+
+    status: reportStatus(
+      item,
+      new Date(item.deadline_at),
+      now
+    ),
+  }));
 
   return NextResponse.json({
     success: true,
 
-    department:
-      department as ReportDepartment,
-
-    report:
-      report as DepartmentReport | null,
-
+    serverTime: now.toISOString(),
     reportDate,
+    deadlineAt: deadline.toISOString(),
 
-    status:
-      getReportStatus(
-        report as DepartmentReport | null,
-        deadline,
-        now
-      ),
+    department,
+    report,
 
-    deadlineAt:
-      deadline.toISOString(),
+    status: reportStatus(
+      report,
+      deadline,
+      now
+    ),
 
-    completedFields:
-      countCompletedReportFields(
-        report as DepartmentReport | null
-      ),
+    completedFields: countFields(report),
+    totalFields: REPORT_FIELDS,
 
-    totalFields:
-      REPORT_FIELD_COUNT,
-
-    history:
-      historyWithStatus,
+    history,
   });
 }
 
 /*
- * SAVE / UPDATE DRAFT
+ * SAVE DRAFT / SAVE CHANGES
  */
 export async function PATCH(
-  request: Request,
-  context: RouteContext
+  request: NextRequest,
+  context: {
+    params: Promise<{
+      departmentId: string;
+    }>;
+  }
 ) {
-  const authorised =
-    await hasValidEditorSession();
+  const { departmentId } = await context.params;
 
-  if (!authorised) {
+  const reportDate =
+    request.nextUrl.searchParams.get("date") ??
+    londonDate();
+
+  if (!validDate(reportDate)) {
     return NextResponse.json(
       {
-        error:
-          "Editing access is required.",
-      },
-      {
-        status: 401,
-      }
-    );
-  }
-
-  const {
-    departmentId,
-  } = await context.params;
-
-  const cleanDepartmentId =
-    departmentId.trim();
-
-  let body: unknown;
-
-  try {
-    body =
-      await request.json();
-  } catch {
-    return NextResponse.json(
-      {
-        error:
-          "Invalid request body.",
+        error: "Invalid report date.",
       },
       {
         status: 400,
@@ -327,114 +444,16 @@ export async function PATCH(
     );
   }
 
+  const departmentResult =
+    await getDepartment(departmentId);
+
   if (
-    typeof body !==
-      "object" ||
-    body === null
+    departmentResult.error ||
+    !departmentResult.data
   ) {
     return NextResponse.json(
       {
-        error:
-          "Invalid report data.",
-      },
-      {
-        status: 400,
-      }
-    );
-  }
-
-  const {
-    reportDate,
-    ...reportValues
-  } = body as {
-    reportDate?: unknown;
-    [key: string]:
-      unknown;
-  };
-
-  if (
-    !isValidReportDate(
-      reportDate
-    )
-  ) {
-    return NextResponse.json(
-      {
-        error:
-          "A valid report date is required.",
-      },
-      {
-        status: 400,
-      }
-    );
-  }
-
-  const validation =
-    validateReportForm(
-      reportValues
-    );
-
-  if (
-    !validation.success
-  ) {
-    return NextResponse.json(
-      {
-        error:
-          validation.error,
-      },
-      {
-        status: 400,
-      }
-    );
-  }
-
-  /*
-   * MAKE SURE DEPARTMENT EXISTS
-   */
-  const {
-    data: department,
-    error:
-      departmentError,
-  } = await supabaseServer
-    .from(
-      "report_departments"
-    )
-    .select(
-      "id, name, nazim_name"
-    )
-    .eq(
-      "id",
-      cleanDepartmentId
-    )
-    .eq(
-      "active",
-      true
-    )
-    .maybeSingle();
-
-  if (
-    departmentError
-  ) {
-    console.error(
-      "Failed to check department:",
-      departmentError
-    );
-
-    return NextResponse.json(
-      {
-        error:
-          "The reporting department could not be checked.",
-      },
-      {
-        status: 500,
-      }
-    );
-  }
-
-  if (!department) {
-    return NextResponse.json(
-      {
-        error:
-          "Reporting department not found.",
+        error: "Department could not be found.",
       },
       {
         status: 404,
@@ -442,40 +461,59 @@ export async function PATCH(
     );
   }
 
-  /*
-   * SEE IF A REPORT ALREADY EXISTS
-   */
-  const {
-    data: existingReport,
-    error:
-      existingError,
-  } = await supabaseServer
-    .from(
-      "department_reports"
-    )
-    .select("id")
-    .eq(
-      "department_id",
-      cleanDepartmentId
-    )
-    .eq(
-      "report_date",
-      reportDate
-    )
-    .maybeSingle();
+  const body = await request
+    .json()
+    .catch(() => null);
 
-  if (
-    existingError
-  ) {
-    console.error(
-      "Failed to check existing report:",
-      existingError
+  /*
+   * Supports both:
+   *
+   * JSON.stringify(form)
+   *
+   * and
+   *
+   * JSON.stringify({ values: form })
+   */
+  const rawValues =
+    typeof body === "object" &&
+    body !== null &&
+    "values" in body
+      ? (body as { values: unknown }).values
+      : body;
+
+  const validated = normaliseForm(rawValues);
+
+  if (validated.error || !validated.values) {
+    return NextResponse.json(
+      {
+        error:
+          validated.error ??
+          "Invalid report information.",
+      },
+      {
+        status: 400,
+      }
     );
+  }
+
+  const department =
+    departmentResult.data as DepartmentRow;
+
+  const existingResult =
+    await supabaseServer
+      .from("department_reports")
+      .select("*")
+      .eq("department_id", departmentId)
+      .eq("report_date", reportDate)
+      .maybeSingle();
+
+  if (existingResult.error) {
+    console.error(existingResult.error);
 
     return NextResponse.json(
       {
         error:
-          "The existing report could not be checked.",
+          "Existing report could not be checked.",
       },
       {
         status: 500,
@@ -483,120 +521,76 @@ export async function PATCH(
     );
   }
 
-  let savedReport:
-    DepartmentReport | null =
-      null;
+  let result;
 
-  if (existingReport) {
+  if (existingResult.data) {
     /*
-     * Preserve submitted_at.
-     *
-     * Editing an already-submitted report therefore
-     * cannot change whether it was originally on time
-     * or late.
+     * submitted_at is deliberately NOT changed.
+     * The initial submission time is preserved.
      */
-    const {
-      data,
-      error,
-    } = await supabaseServer
-      .from(
-        "department_reports"
-      )
+    result = await supabaseServer
+      .from("department_reports")
       .update({
-        ...validation.values,
+        ...validated.values,
       })
-      .eq(
-        "id",
-        existingReport.id
-      )
+      .eq("id", existingResult.data.id)
       .select("*")
       .single();
-
-    if (error) {
-      console.error(
-        "Failed to update report:",
-        error
-      );
-
-      return NextResponse.json(
-        {
-          error:
-            "The report could not be saved.",
-        },
-        {
-          status: 500,
-        }
-      );
-    }
-
-    savedReport =
-      data as DepartmentReport;
   } else {
-    /*
-     * The database trigger automatically supplies:
-     *
-     * department_name_snapshot
-     * nazim_name_snapshot
-     * deadline_at
-     */
-    const {
-      data,
-      error,
-    } = await supabaseServer
-      .from(
-        "department_reports"
-      )
+    result = await supabaseServer
+      .from("department_reports")
       .insert({
-        department_id:
-          cleanDepartmentId,
-        report_date:
-          reportDate,
-        ...validation.values,
+        department_id: departmentId,
+        report_date: reportDate,
+
+        department_name_snapshot:
+          department.name,
+
+        nazim_name_snapshot:
+          department.nazim_name,
+
+        deadline_at:
+          reportDeadline(reportDate).toISOString(),
+
+        ...validated.values,
       })
       .select("*")
       .single();
-
-    if (error) {
-      console.error(
-        "Failed to create report draft:",
-        error
-      );
-
-      return NextResponse.json(
-        {
-          error:
-            "The report draft could not be created.",
-        },
-        {
-          status: 500,
-        }
-      );
-    }
-
-    savedReport =
-      data as DepartmentReport;
   }
+
+  if (result.error || !result.data) {
+    console.error(result.error);
+
+    return NextResponse.json(
+      {
+        error: "Report could not be saved.",
+      },
+      {
+        status: 500,
+      }
+    );
+  }
+
+  const report =
+    result.data as DepartmentReport;
+
+  const deadline =
+    new Date(report.deadline_at);
 
   return NextResponse.json({
     success: true,
 
-    report:
-      savedReport,
+    report,
 
-    status:
-      getReportStatus(
-        savedReport,
-        new Date(
-          savedReport.deadline_at
-        )
-      ),
+    status: reportStatus(
+      report,
+      deadline
+    ),
 
     completedFields:
-      countCompletedReportFields(
-        savedReport
-      ),
+      countFields(report),
 
     totalFields:
-      REPORT_FIELD_COUNT,
+      REPORT_FIELDS,
   });
 }

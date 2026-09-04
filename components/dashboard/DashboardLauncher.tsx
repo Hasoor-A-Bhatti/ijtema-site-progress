@@ -1,42 +1,143 @@
 "use client";
 
-import { useState } from "react";
+import {
+  useEffect,
+  useState,
+} from "react";
 
-import DashboardOverlay from "./DashboardOverlay";
+import DashboardOverlay, {
+  type DashboardTab,
+} from "./DashboardOverlay";
 
 export default function DashboardLauncher() {
-  const [open, setOpen] = useState(false);
+  const [
+    open,
+    setOpen,
+  ] = useState(false);
+
+  const [
+    initialTab,
+    setInitialTab,
+  ] =
+    useState<DashboardTab>(
+      "summary"
+    );
+
+  /*
+   * Deep-link support.
+   *
+   * Examples:
+   *
+   * ?dashboard=reports
+   * ?dashboard=summary
+   *
+   * Equipment is deliberately NOT opened
+   * automatically because it remains protected.
+   */
+  useEffect(() => {
+    const timer =
+      window.setTimeout(
+        () => {
+          const params =
+            new URLSearchParams(
+              window.location.search
+            );
+
+          const dashboard =
+            params.get(
+              "dashboard"
+            );
+
+          if (
+            dashboard ===
+            "reports"
+          ) {
+            setInitialTab(
+              "reports"
+            );
+
+            setOpen(true);
+          }
+
+          if (
+            dashboard ===
+            "summary"
+          ) {
+            setInitialTab(
+              "summary"
+            );
+
+            setOpen(true);
+          }
+        },
+        0
+      );
+
+    return () => {
+      window.clearTimeout(
+        timer
+      );
+    };
+  }, []);
+
+  function openDashboard() {
+    setInitialTab(
+      "summary"
+    );
+
+    setOpen(true);
+  }
+
+  function closeDashboard() {
+    setOpen(false);
+
+    /*
+     * Remove ?dashboard=reports after closing.
+     *
+     * Otherwise refreshing the page would
+     * immediately reopen the dashboard.
+     *
+     * Other query parameters are preserved.
+     */
+    const url =
+      new URL(
+        window.location.href
+      );
+
+    url.searchParams.delete(
+      "dashboard"
+    );
+
+    const nextUrl =
+      `${url.pathname}${url.search}${url.hash}`;
+
+    window.history.replaceState(
+      {},
+      "",
+      nextUrl
+    );
+  }
 
   return (
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
-        aria-label="Open dashboard"
-        className="flex h-10 items-center gap-2 rounded-full border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 active:bg-slate-100"
+        onClick={
+          openDashboard
+        }
+        className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 active:bg-slate-100"
       >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          className="h-4 w-4"
-          aria-hidden="true"
-        >
-          <rect x="3" y="3" width="7" height="7" rx="1.5" />
-          <rect x="14" y="3" width="7" height="7" rx="1.5" />
-          <rect x="3" y="14" width="7" height="7" rx="1.5" />
-          <rect x="14" y="14" width="7" height="7" rx="1.5" />
-        </svg>
-
-        <span className="hidden sm:inline">
-          Dashboard
-        </span>
+        Dashboard
       </button>
 
       {open && (
         <DashboardOverlay
-          onClose={() => setOpen(false)}
+          initialTab={
+            initialTab
+          }
+          onClose={
+            closeDashboard
+          }
         />
       )}
     </>
