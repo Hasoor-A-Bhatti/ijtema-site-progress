@@ -1,4 +1,5 @@
 import {
+  ALL_STATUS_ORDER,
   STATUS_CONFIG,
 } from "@/config/statuses";
 
@@ -6,9 +7,6 @@ import type {
   DashboardMetrics,
 } from "@/hooks/useDashboardData";
 
-import type {
-  SiteStatus,
-} from "@/types/site";
 
 interface SiteSummaryProps {
   metrics: DashboardMetrics;
@@ -17,22 +15,6 @@ interface SiteSummaryProps {
   lastUpdated: Date | null;
   onRefresh: () => Promise<void>;
 }
-
-const STATUS_ORDER: SiteStatus[] = [
-  "not_started",
-  "laid",
-  "preparing",
-  "ready_for_inspection",
-  "completed",
-];
-
-const STATUS_LABELS: Record<SiteStatus, string> = {
-  not_started: "Not Started",
-  laid: "Laid / Established",
-  preparing: "Being Prepared",
-  ready_for_inspection: "Ready for Inspection",
-  completed: "Fully Completed",
-};
 
 function formatTime(date: Date | null) {
   if (!date) return "Updating...";
@@ -221,7 +203,7 @@ export default function SiteSummary({
                 </p>
 
                 <p className="font-medium text-emerald-700">
-                  {metrics.fullyCompleted} fully completed
+                  {metrics.fullyCompleted} signed off
                 </p>
               </div>
             </div>
@@ -264,7 +246,7 @@ export default function SiteSummary({
 
               <div className="mt-3 flex flex-wrap gap-2 text-xs">
                 <span className="rounded-full bg-emerald-50 px-2.5 py-1 font-semibold text-emerald-700">
-                  {workstream.completed} complete
+                  {workstream.completed} signed off
                 </span>
 
                 <span className="rounded-full bg-blue-50 px-2.5 py-1 font-semibold text-blue-700">
@@ -335,7 +317,7 @@ export default function SiteSummary({
 
                     <p className="mt-1 pl-[18px] text-xs text-slate-500">
                       {formatAreaType(area.areaType)} ·{" "}
-                      {STATUS_LABELS[area.status]}
+                      {STATUS_CONFIG[area.status].label}
                     </p>
                   </div>
 
@@ -533,7 +515,7 @@ export default function SiteSummary({
         </div>
 
         <div className="mt-5 flex h-3 overflow-hidden rounded-full bg-slate-100">
-          {STATUS_ORDER.map((status) => {
+          {ALL_STATUS_ORDER.map((status) => {
             const count = metrics.statusCounts[status];
 
             const width =
@@ -544,7 +526,7 @@ export default function SiteSummary({
             return (
               <div
                 key={status}
-                title={`${STATUS_LABELS[status]}: ${count}`}
+                title={`${STATUS_CONFIG[status].label}: ${count}`}
                 style={{
                   width: `${width}%`,
                   backgroundColor:
@@ -555,8 +537,8 @@ export default function SiteSummary({
           })}
         </div>
 
-        <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-5">
-          {STATUS_ORDER.map((status) => (
+        <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
+          {ALL_STATUS_ORDER.map((status) => (
             <div
               key={status}
               className="rounded-xl border border-slate-200 p-3"
@@ -571,7 +553,7 @@ export default function SiteSummary({
                 />
 
                 <p className="truncate text-xs font-medium text-slate-600">
-                  {STATUS_LABELS[status]}
+                  {STATUS_CONFIG[status].label}
                 </p>
               </div>
 

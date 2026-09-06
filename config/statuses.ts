@@ -1,71 +1,126 @@
-import type {
-  AreaType,
-  SiteStatus,
-} from "@/types/site";
+import type { AreaType, SiteStatus } from "@/types/site";
 
-export const STATUS_CONFIG: Record<
-  SiteStatus,
-  {
-    colour: string;
-    shortLabel: string;
-  }
-> = {
+interface StatusConfigItem {
+  label: string;
+  colour: string;
+}
+
+export const STATUS_CONFIG: Record<SiteStatus, StatusConfigItem> = {
   not_started: {
-    colour: "#6B7280",
-    shortLabel: "Not Started",
+    label: "Not Started",
+    colour: "#94A3B8",
   },
-
-  laid: {
+  marked: {
+    label: "Marked",
     colour: "#FACC15",
-    shortLabel: "Laid",
   },
-
-  preparing: {
-    colour: "#F59E0B",
-    shortLabel: "Being Prepared",
+  construction_started: {
+    label: "Construction Started",
+    colour: "#FB923C",
   },
-
+  construction_completed: {
+    label: "Construction Completed",
+    colour: "#C084FC",
+  },
+  carpeting_completed: {
+    label: "Carpeting Completed",
+    colour: "#2DD4BF",
+  },
+  electrical_installation_completed: {
+    label: "Electrical Installation Completed",
+    colour: "#22D3EE",
+  },
+  track_laid: {
+    label: "Track Laid",
+    colour: "#FB923C",
+  },
+  fence_erected: {
+    label: "Fence Erected",
+    colour: "#FB923C",
+  },
+  fence_secured: {
+    label: "Fence Secured",
+    colour: "#C084FC",
+  },
+  fence_covered: {
+    label: "Fence Covered",
+    colour: "#2DD4BF",
+  },
   ready_for_inspection: {
-    colour: "#3B82F6",
-    shortLabel: "Ready for Inspection",
+    label: "Ready for Inspection",
+    colour: "#60A5FA",
   },
-
-  completed: {
-    colour: "#22C55E",
-    shortLabel: "Fully Completed",
+  signed_off: {
+    label: "Signed Off",
+    colour: "#4ADE80",
   },
 };
 
-export const STATUS_ORDER: SiteStatus[] = [
+export const MARQUEE_STATUS_ORDER: SiteStatus[] = [
   "not_started",
-  "laid",
-  "preparing",
+  "marked",
+  "construction_started",
+  "construction_completed",
+  "carpeting_completed",
+  "electrical_installation_completed",
   "ready_for_inspection",
-  "completed",
+  "signed_off",
 ];
+
+export const TRACK_STATUS_ORDER: SiteStatus[] = [
+  "not_started",
+  "marked",
+  "track_laid",
+  "ready_for_inspection",
+  "signed_off",
+];
+
+export const FENCE_STATUS_ORDER: SiteStatus[] = [
+  "not_started",
+  "marked",
+  "fence_erected",
+  "fence_secured",
+  "fence_covered",
+  "ready_for_inspection",
+  "signed_off",
+];
+
+export const ALL_STATUS_ORDER: SiteStatus[] = [
+  "not_started",
+  "marked",
+  "construction_started",
+  "construction_completed",
+  "carpeting_completed",
+  "electrical_installation_completed",
+  "track_laid",
+  "fence_erected",
+  "fence_secured",
+  "fence_covered",
+  "ready_for_inspection",
+  "signed_off",
+];
+
+// Kept for compatibility with any existing dashboard code that still imports STATUS_ORDER.
+export const STATUS_ORDER = ALL_STATUS_ORDER;
+
+export function getStatusOrder(areaType: AreaType): SiteStatus[] {
+  if (
+    areaType === "metal_tracking" ||
+    areaType === "rubber_tracking"
+  ) {
+    return TRACK_STATUS_ORDER;
+  }
+
+  if (areaType === "fence") {
+    return FENCE_STATUS_ORDER;
+  }
+
+  return MARQUEE_STATUS_ORDER;
+}
 
 export function getStatusLabel(
   status: SiteStatus,
-  areaType: AreaType
-) {
-  if (status === "laid") {
-    if (areaType === "marquee") {
-      return "Marquee Laid";
-    }
-
-    if (
-      areaType === "rubber_tracking" ||
-      areaType === "metal_tracking"
-    ) {
-      return "Tracking Laid";
-    }
-
-    if (areaType === "fence") {
-      return "Fence Installed";
-    }
-
-    return "Area Established";
-  }
-
-  return STATUS_CONFIG[status].shortLabel;
+  _areaType?: AreaType
+): string {
+  return STATUS_CONFIG[status].label;
 }

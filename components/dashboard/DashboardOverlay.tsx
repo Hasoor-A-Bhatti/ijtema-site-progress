@@ -3,15 +3,11 @@
 import { useEffect, useState } from "react";
 
 import EquipmentLoans from "./EquipmentLoans";
-import SiteReports from "./SiteReports";
+import ReportPortal from "./ReportPortal";
 import SiteSummary from "./SiteSummary";
 
 import { useEditorAccess } from "@/components/editor/EditorAccessProvider";
 import useDashboardData from "@/hooks/useDashboardData";
-
-import useSiteReports, {
-  getLondonDateString,
-} from "@/hooks/useSiteReports";
 
 export type DashboardTab =
   | "summary"
@@ -21,14 +17,6 @@ export type DashboardTab =
 interface DashboardOverlayProps {
   onClose: () => void;
   initialTab?: DashboardTab;
-}
-
-function formatDate(date: string) {
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "numeric",
-    month: "short",
-    timeZone: "Europe/London",
-  }).format(new Date(`${date}T12:00:00Z`));
 }
 
 function LockIcon() {
@@ -54,13 +42,6 @@ export default function DashboardOverlay({
   const [activeTab, setActiveTab] =
     useState<DashboardTab>(initialTab);
 
-  const [reportDate, setReportDate] =
-    useState(getLondonDateString());
-
-  /*
-   * Editor access is now ONLY required
-   * for Equipment Loans.
-   */
   const {
     canEdit,
     loading: accessLoading,
@@ -75,20 +56,6 @@ export default function DashboardOverlay({
     refresh: refreshSite,
   } = useDashboardData();
 
-  /*
-   * Site Reports are public inside the app,
-   * so they always load.
-   */
-  const {
-    data: reportsData,
-    loading: reportsLoading,
-    error: reportsError,
-    refresh: refreshReports,
-  } = useSiteReports(reportDate, true);
-
-  /*
-   * Escape closes dashboard.
-   */
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") onClose();
@@ -102,10 +69,8 @@ export default function DashboardOverlay({
   }, [onClose]);
 
   /*
-   * If editor access expires while Equipment Loans
-   * is open, return to Site Summary.
-   *
-   * Site Reports are deliberately unaffected.
+   * Only Equipment Loans uses the main editor password.
+   * Site Reports has its own Admin / Department sign-in.
    */
   useEffect(() => {
     if (
@@ -123,9 +88,6 @@ export default function DashboardOverlay({
     return () => window.clearTimeout(timeout);
   }, [accessLoading, canEdit, activeTab]);
 
-  /*
-   * Only Equipment Loans is protected now.
-   */
   function openEquipmentLoans() {
     if (accessLoading) return;
 
@@ -138,19 +100,6 @@ export default function DashboardOverlay({
       setActiveTab("equipment");
     });
   }
-
-  const reportsSubmitted = reportsLoading
-    ? "—"
-    : `${reportsData?.submitted ?? 0}/${
-        reportsData?.totalDepartments ?? 19
-      }`;
-
-  const overdueCount =
-    reportsData?.summary.overdue ?? 0;
-
-  const reportsOverdue = reportsLoading
-    ? "—"
-    : String(overdueCount);
 
   return (
     <div
@@ -194,7 +143,7 @@ export default function DashboardOverlay({
             </button>
           </div>
 
-          {/* NAVIGATION */}
+          {/* DASHBOARD NAVIGATION */}
           <div className="overflow-x-auto px-4 sm:px-6">
             <div className="flex w-max min-w-full gap-1">
               <button
@@ -209,7 +158,7 @@ export default function DashboardOverlay({
                 Site Summary
               </button>
 
-              {/* SITE REPORTS — NO PASSWORD */}
+              {/* Site Reports now has its own reporting login. */}
               <button
                 type="button"
                 onClick={() => setActiveTab("reports")}
@@ -222,7 +171,7 @@ export default function DashboardOverlay({
                 Site Reports
               </button>
 
-              {/* EQUIPMENT LOANS — STILL PROTECTED */}
+              {/* Equipment Loans keeps the main editor password. */}
               <button
                 type="button"
                 disabled={accessLoading}
@@ -240,20 +189,15 @@ export default function DashboardOverlay({
           </div>
         </header>
 
-        {/* DESKTOP CONFERENCE STRIP
-            Hidden on phones as previously requested.
-        */}
+        {/* DESKTOP SITE STRIP — report totals are intentionally not exposed before reporting login. */}
         <div className="hidden border-b border-slate-200 bg-slate-50 px-4 py-3 sm:block sm:px-6">
-          <div className="grid grid-cols-3 gap-2 xl:grid-cols-6">
+          <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
             <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
                 Site Progress
               </p>
-
               <p className="mt-1 text-xl font-bold text-slate-950">
-                {siteLoading
-                  ? "—"
-                  : `${metrics.overallProgress}%`}
+                {siteLoading ? "—" : `${metrics.overallProgress}%`}
               </p>
             </div>
 
@@ -261,7 +205,6 @@ export default function DashboardOverlay({
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
                 Urgent Issues
               </p>
-
               <p
                 className={`mt-1 text-xl font-bold ${
                   metrics.urgentOutstanding > 0
@@ -277,7 +220,6 @@ export default function DashboardOverlay({
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
                 Ready to Inspect
               </p>
-
               <p className="mt-1 text-xl font-bold text-blue-600">
                 {metrics.readyForInspection}
               </p>
@@ -285,48 +227,12 @@ export default function DashboardOverlay({
 
             <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                Completed
+                Signed Off
               </p>
-
               <p className="mt-1 text-xl font-bold text-emerald-600">
                 {metrics.fullyCompleted}
               </p>
             </div>
-
-            {/* REPORTS — DIRECT ACCESS */}
-            <button
-              type="button"
-              onClick={() => setActiveTab("reports")}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left transition hover:bg-slate-50"
-            >
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                Reports · {formatDate(reportDate)}
-              </p>
-
-              <p className="mt-1 text-xl font-bold text-slate-950">
-                {reportsSubmitted}
-              </p>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab("reports")}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left transition hover:bg-slate-50"
-            >
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                Reports Overdue
-              </p>
-
-              <p
-                className={`mt-1 text-xl font-bold ${
-                  overdueCount > 0
-                    ? "text-red-600"
-                    : "text-slate-950"
-                }`}
-              >
-                {reportsOverdue}
-              </p>
-            </button>
           </div>
         </div>
 
@@ -342,19 +248,8 @@ export default function DashboardOverlay({
             />
           )}
 
-          {/* SITE REPORTS — NO canEdit CHECK */}
-          {activeTab === "reports" && (
-            <SiteReports
-              reportDate={reportDate}
-              data={reportsData}
-              loading={reportsLoading}
-              error={reportsError}
-              onDateChange={setReportDate}
-              onRefresh={refreshReports}
-            />
-          )}
+          {activeTab === "reports" && <ReportPortal />}
 
-          {/* EQUIPMENT LOANS — STILL PASSWORD PROTECTED */}
           {activeTab === "equipment" && canEdit && (
             <EquipmentLoans enabled={canEdit} />
           )}

@@ -1,3 +1,5 @@
+import { STATUS_CONFIG } from "@/config/statuses";
+
 import type {
   InfrastructureType,
   SiteArea,
@@ -64,53 +66,6 @@ const RENDER_PRIORITY: Record<
   fence: 0,
   metal_tracking: 1,
   rubber_tracking: 2,
-};
-
-const INFRASTRUCTURE_STATUS_COLOURS: Record<
-  InfrastructureType,
-  Record<
-    SiteStatus,
-    string
-  >
-> = {
-  metal_tracking: {
-    not_started:
-      "#CBD5E1",
-    laid:
-      "#FDE68A",
-    preparing:
-      "#FED7AA",
-    ready_for_inspection:
-      "#93C5FD",
-    completed:
-      "#86EFAC",
-  },
-
-  rubber_tracking: {
-    not_started:
-      "#D6D3D1",
-    laid:
-      "#FEF3A3",
-    preparing:
-      "#FED7AA",
-    ready_for_inspection:
-      "#A7CDFB",
-    completed:
-      "#A7F3C0",
-  },
-
-  fence: {
-    not_started:
-      "#FECACA",
-    laid:
-      "#FEF3A3",
-    preparing:
-      "#FED7AA",
-    ready_for_inspection:
-      "#A7CDFB",
-    completed:
-      "#A7F3C0",
-  },
 };
 
 function isInfrastructureType(
@@ -332,9 +287,8 @@ export default function InfrastructureLineLayer({
             ];
 
           const lineColour =
-            INFRASTRUCTURE_STATUS_COLOURS[
-              line.type
-            ][status];
+            STATUS_CONFIG[status]?.colour ??
+            STATUS_CONFIG.not_started.colour;
 
           const lineOpacity =
             status ===

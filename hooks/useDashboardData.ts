@@ -2,9 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import {
+  ALL_STATUS_ORDER,
+  getStatusOrder,
+} from "@/config/statuses";
 import { supabase } from "@/lib/supabase";
 
-import type { SiteStatus } from "@/types/site";
+import type {
+  AreaType,
+  SiteStatus,
+} from "@/types/site";
 
 interface SiteAreaRow {
   id: string;
@@ -95,22 +102,14 @@ export interface DashboardMetrics {
   workstreams: WorkstreamMetric[];
 }
 
-const STATUS_WEIGHT: Record<SiteStatus, number> = {
-  not_started: 0,
-  laid: 25,
-  preparing: 50,
-  ready_for_inspection: 75,
-  completed: 100,
-};
-
 function createStatusCounts(): Record<SiteStatus, number> {
-  return {
-    not_started: 0,
-    laid: 0,
-    preparing: 0,
-    ready_for_inspection: 0,
-    completed: 0,
-  };
+  return ALL_STATUS_ORDER.reduce(
+    (counts, status) => {
+      counts[status] = 0;
+      return counts;
+    },
+    {} as Record<SiteStatus, number>
+  );
 }
 
 const EMPTY_METRICS: DashboardMetrics = {
@@ -137,28 +136,41 @@ const EMPTY_METRICS: DashboardMetrics = {
   workstreams: [],
 };
 
+function getAreaProgress(area: SiteAreaRow) {
+  const order = getStatusOrder(area.area_type as AreaType);
+  const stageIndex = order.indexOf(area.status);
+
+  if (stageIndex < 0 || order.length <= 1) return 0;
+
+  return stageIndex / (order.length - 1);
+}
+
 function calculateProgress(areas: SiteAreaRow[]) {
   if (areas.length === 0) return 0;
 
   const total = areas.reduce(
-    (sum, area) => sum + STATUS_WEIGHT[area.status],
+    (sum, area) => sum + getAreaProgress(area),
     0
   );
 
-  return Math.round(total / areas.length);
+  return Math.round((total / areas.length) * 100);
 }
 
 function calculateStatusCounts(areas: SiteAreaRow[]) {
   const counts = createStatusCounts();
 
   areas.forEach((area) => {
-    counts[area.status] += 1;
+    if (area.status in counts) {
+      counts[area.status] += 1;
+    }
   });
 
   return counts;
 }
 
-function getWorkstreamKey(areaType: string): WorkstreamMetric["key"] {
+function getWorkstreamKey(
+  areaType: string
+): WorkstreamMetric["key"] {
   if (areaType === "metal_tracking") return "metal_tracking";
   if (areaType === "rubber_tracking") return "rubber_tracking";
   if (areaType === "fence") return "fence";
@@ -377,7 +389,7 @@ export default function useDashboardData() {
             total: workstreamAreas.length,
             progress: calculateProgress(workstreamAreas),
             completed: workstreamAreas.filter(
-              (area) => area.status === "completed"
+              (area) => area.status === "signed_off"
             ).length,
             ready: workstreamAreas.filter(
               (area) =>
@@ -407,7 +419,7 @@ export default function useDashboardData() {
           statusCounts.ready_for_inspection,
 
         fullyCompleted:
-          statusCounts.completed,
+          statusCounts.signed_off,
 
         attentionAreas,
         inspectionQueue,

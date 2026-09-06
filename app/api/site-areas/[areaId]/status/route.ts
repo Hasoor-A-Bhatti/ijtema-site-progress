@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 
+import { getStatusOrder } from "@/config/statuses";
 import { hasValidEditorSession } from "@/lib/auth/requireEditorSession";
 import { supabaseServer } from "@/lib/supabaseServer";
 
-import type { SiteStatus } from "@/types/site";
+import type { AreaType, SiteStatus } from "@/types/site";
 
 interface RouteContext {
   params: Promise<{
@@ -13,19 +14,32 @@ interface RouteContext {
 
 const VALID_STATUSES: SiteStatus[] = [
   "not_started",
-  "laid",
-  "preparing",
+  "marked",
+  "construction_started",
+  "construction_completed",
+  "carpeting_completed",
+  "electrical_installation_completed",
+  "track_laid",
+  "fence_erected",
+  "fence_secured",
+  "fence_covered",
   "ready_for_inspection",
-  "completed",
+  "signed_off",
 ];
+
+function isInfrastructureType(areaType: string) {
+  return (
+    areaType === "fence" ||
+    areaType === "rubber_tracking" ||
+    areaType === "metal_tracking"
+  );
+}
 
 export async function PATCH(
   request: Request,
   context: RouteContext
 ) {
-  /*
-   * 1. AUTHORISATION
-   */
+  /* 1. AUTHORISATION */
   const authorised = await hasValidEditorSession();
 
   if (!authorised) {
@@ -46,9 +60,7 @@ export async function PATCH(
 
   const cleanAreaId = areaId.trim();
 
-  /*
-   * 2. READ + VALIDATE REQUEST
-   */
+  /* 2. READ REQUEST */
   let body: unknown;
 
   try {
@@ -85,26 +97,15 @@ export async function PATCH(
 
   const newStatus = status as SiteStatus;
 
-  /*
-   * 3. MAKE SURE FEATURE EXISTS
-   *
-   * We also retrieve area_type so infrastructure can
-   * follow its own four-stage progress workflow.
-   */
-  const {
-    data: area,
-    error: areaError,
-  } = await supabaseServer
+  /* 3. LOAD FEATURE */
+  const { data: area, error: areaError } = await supabaseServer
     .from("site_areas")
     .select("id, name, area_type, status")
     .eq("id", cleanAreaId)
     .maybeSingle();
 
   if (areaError) {
-    console.error(
-      "Failed to retrieve site area:",
-      areaError
-    );
+    console.error("Failed to retrieve site area:", areaError);
 
     return NextResponse.json(
       { error: "The site area could not be checked." },
@@ -119,47 +120,35 @@ export async function PATCH(
     );
   }
 
-  /*
-   * 4. DETERMINE WHETHER THIS IS INFRASTRUCTURE
-   */
-  const isInfrastructure =
-    area.area_type === "fence" ||
-    area.area_type === "rubber_tracking" ||
-    area.area_type === "metal_tracking";
+  const areaType = area.area_type as AreaType;
+  const allowedStatuses = getStatusOrder(areaType);
+  const isInfrastructure = isInfrastructureType(area.area_type);
 
-  /*
-   * Infrastructure has no "Being Prepared" stage.
-   *
-   * Its workflow is:
-   *
-   * Not Started
-   * → Tracking Laid / Fence Installed
-   * → Ready for Inspection
-   * → Fully Completed
-   *
-   * This is enforced server-side as well as hidden
-   * from the UI.
-   */
-  if (
-    isInfrastructure &&
-    newStatus === "preparing"
-  ) {
+  /* 4. ENFORCE TYPE-SPECIFIC WORKFLOW */
+  if (!allowedStatuses.includes(newStatus)) {
+    const workflowName =
+      area.area_type === "fence"
+        ? "fence"
+        : area.area_type === "metal_tracking" ||
+            area.area_type === "rubber_tracking"
+          ? "tracking"
+          : "marquee / site area";
+
     return NextResponse.json(
       {
-        error:
-          "Infrastructure does not use the Being Prepared stage.",
+        error: `That progress stage is not valid for this ${workflowName} workflow.`,
       },
       { status: 400 }
     );
   }
 
   /*
-   * 5. BLUE / GREEN CANNOT HAVE AN
-   *    UNRESOLVED URGENT ISSUE
+   * 5. READY FOR INSPECTION / SIGNED OFF
+   *    CANNOT HAVE UNRESOLVED URGENT ISSUES
    */
   if (
     newStatus === "ready_for_inspection" ||
-    newStatus === "completed"
+    newStatus === "signed_off"
   ) {
     const {
       count: unresolvedUrgentCount,
@@ -174,10 +163,7 @@ export async function PATCH(
       .eq("completed", false);
 
     if (urgentError) {
-      console.error(
-        "Failed to check urgent tasks:",
-        urgentError
-      );
+      console.error("Failed to check urgent tasks:", urgentError);
 
       return NextResponse.json(
         {
@@ -188,14 +174,12 @@ export async function PATCH(
       );
     }
 
-    if (
-      (unresolvedUrgentCount ?? 0) > 0
-    ) {
+    if ((unresolvedUrgentCount ?? 0) > 0) {
       return NextResponse.json(
         {
           error:
-            newStatus === "completed"
-              ? "This area cannot be marked Fully Completed while urgent issues remain unresolved."
+            newStatus === "signed_off"
+              ? "This area cannot be Signed Off while urgent issues remain unresolved."
               : "This area cannot be marked Ready for Inspection while urgent issues remain unresolved.",
         },
         { status: 409 }
@@ -204,19 +188,13 @@ export async function PATCH(
   }
 
   /*
-   * 6. GREEN EQUIPMENT CHECK
+   * 6. SIGN-OFF EQUIPMENT CHECK
    *
-   * Normal site areas must have every recorded
-   * equipment requirement physically received AND
-   * manually confirmed before reaching Green.
-   *
-   * Infrastructure has no equipment workflow, so
-   * this check is skipped completely for lines.
+   * Normal site areas must have every recorded equipment
+   * requirement received and manually confirmed before sign-off.
+   * Infrastructure has no equipment workflow, so lines skip this.
    */
-  if (
-    newStatus === "completed" &&
-    !isInfrastructure
-  ) {
+  if (newStatus === "signed_off" && !isInfrastructure) {
     const {
       data: equipmentRequirements,
       error: equipmentError,
@@ -245,8 +223,7 @@ export async function PATCH(
     const incompleteEquipment =
       equipmentRequirements?.filter(
         (item) =>
-          item.quantity_received <
-            item.quantity_required ||
+          item.quantity_received < item.quantity_required ||
           !item.completed
       ) ?? [];
 
@@ -254,30 +231,24 @@ export async function PATCH(
       return NextResponse.json(
         {
           error:
-            "This area cannot be marked Fully Completed until all equipment requirements have been received and confirmed.",
+            "This area cannot be Signed Off until all equipment requirements have been received and confirmed.",
         },
         { status: 409 }
       );
     }
   }
 
-  /*
-   * 7. UPDATE STATUS
-   */
-  const {
-    data: updatedArea,
-    error: updateError,
-  } = await supabaseServer
-    .from("site_areas")
-    .update({
-      status: newStatus,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", cleanAreaId)
-    .select(
-      "id, name, area_type, status, updated_at"
-    )
-    .single();
+  /* 7. UPDATE STATUS */
+  const { data: updatedArea, error: updateError } =
+    await supabaseServer
+      .from("site_areas")
+      .update({
+        status: newStatus,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", cleanAreaId)
+      .select("id, name, area_type, status, updated_at")
+      .single();
 
   if (updateError) {
     console.error(
@@ -287,16 +258,12 @@ export async function PATCH(
 
     return NextResponse.json(
       {
-        error:
-          "The progress update could not be saved.",
+        error: "The progress update could not be saved.",
       },
       { status: 500 }
     );
   }
 
-  /*
-   * 8. SUCCESS
-   */
   return NextResponse.json({
     success: true,
     area: updatedArea,

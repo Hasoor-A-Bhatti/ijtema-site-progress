@@ -1,9 +1,16 @@
 export type SiteStatus =
   | "not_started"
-  | "laid"
-  | "preparing"
+  | "marked"
+  | "construction_started"
+  | "construction_completed"
+  | "carpeting_completed"
+  | "electrical_installation_completed"
+  | "track_laid"
+  | "fence_erected"
+  | "fence_secured"
+  | "fence_covered"
   | "ready_for_inspection"
-  | "completed";
+  | "signed_off";
 
 export type InfrastructureType =
   | "fence"

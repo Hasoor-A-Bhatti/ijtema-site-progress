@@ -1,6 +1,7 @@
 import {
+  ALL_STATUS_ORDER,
+  getStatusOrder,
   STATUS_CONFIG,
-  STATUS_ORDER,
 } from "@/config/statuses";
 
 import type {
@@ -17,7 +18,7 @@ export default function ProgressSummary({
   areas,
   statuses,
 }: ProgressSummaryProps) {
-  const counts = STATUS_ORDER.reduce(
+  const counts = ALL_STATUS_ORDER.reduce(
     (result, status) => {
       result[status] = 0;
       return result;
@@ -31,14 +32,17 @@ export default function ProgressSummary({
     const status =
       statuses[area.id] ?? area.status;
 
-    counts[status] += 1;
+    if (status in counts) {
+      counts[status] += 1;
+    }
 
-    const stageIndex =
-      STATUS_ORDER.indexOf(status);
+    const statusOrder = getStatusOrder(area.type);
+    const stageIndex = statusOrder.indexOf(status);
 
-    totalProgress +=
-      stageIndex /
-      (STATUS_ORDER.length - 1);
+    if (stageIndex >= 0 && statusOrder.length > 1) {
+      totalProgress +=
+        stageIndex / (statusOrder.length - 1);
+    }
   });
 
   const percentage =
@@ -62,9 +66,10 @@ export default function ProgressSummary({
 
       <div className="h-8 w-px shrink-0 bg-slate-200" />
 
-      {STATUS_ORDER.map((status) => (
+      {ALL_STATUS_ORDER.map((status) => (
         <div
           key={status}
+          title={STATUS_CONFIG[status].label}
           className="flex shrink-0 items-center gap-2 text-sm"
         >
           <span
