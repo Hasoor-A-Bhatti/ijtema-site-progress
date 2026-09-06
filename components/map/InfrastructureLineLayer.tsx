@@ -287,8 +287,10 @@ export default function InfrastructureLineLayer({
             ];
 
           const lineColour =
-            STATUS_CONFIG[status]?.colour ??
-            STATUS_CONFIG.not_started.colour;
+            line.type === "fence" && status === "not_started"
+                ? "#111111"
+                : STATUS_CONFIG[status]?.colour ??
+                STATUS_CONFIG.not_started.colour;
 
           const lineOpacity =
             status ===
