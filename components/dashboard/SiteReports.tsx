@@ -8,6 +8,7 @@ import {
 } from "react";
 
 import DepartmentReportPanel from "./DepartmentReportPanel";
+import SiteAccountsTracker from "./SiteAccountsTracker";
 
 import {
   getLondonDateString,
@@ -84,6 +85,7 @@ function addDays(
 
   return [
     value.getUTCFullYear(),
+
     String(
       value.getUTCMonth() +
         1
@@ -91,6 +93,7 @@ function addDays(
       2,
       "0"
     ),
+
     String(
       value.getUTCDate()
     ).padStart(
@@ -106,10 +109,18 @@ function formatDate(
   return new Intl.DateTimeFormat(
     "en-GB",
     {
-      weekday: "short",
-      day: "numeric",
-      month: "short",
-      year: "numeric",
+      weekday:
+        "short",
+
+      day:
+        "numeric",
+
+      month:
+        "short",
+
+      year:
+        "numeric",
+
       timeZone:
         "Europe/London",
     }
@@ -133,8 +144,12 @@ function formatTime(
   return new Intl.DateTimeFormat(
     "en-GB",
     {
-      hour: "2-digit",
-      minute: "2-digit",
+      hour:
+        "2-digit",
+
+      minute:
+        "2-digit",
+
       timeZone:
         "Europe/London",
     }
@@ -146,21 +161,29 @@ function formatTime(
 function getStatusPresentation(
   status: ReportStatus
 ) {
-  switch (status) {
+  switch (
+    status
+  ) {
     case "completed":
       return {
-        label: "On Time",
+        label:
+          "On Time",
+
         dot:
           "bg-emerald-500",
+
         classes:
           "bg-emerald-50 text-emerald-700",
       };
 
     case "late":
       return {
-        label: "Late",
+        label:
+          "Late",
+
         dot:
           "bg-amber-500",
+
         classes:
           "bg-amber-50 text-amber-700",
       };
@@ -169,8 +192,10 @@ function getStatusPresentation(
       return {
         label:
           "Overdue",
+
         dot:
           "bg-red-500",
+
         classes:
           "bg-red-50 text-red-700",
       };
@@ -179,8 +204,10 @@ function getStatusPresentation(
       return {
         label:
           "Pending",
+
         dot:
           "bg-blue-500",
+
         classes:
           "bg-blue-50 text-blue-700",
       };
@@ -213,7 +240,9 @@ export default function SiteReports({
     selectedDepartmentId,
     setSelectedDepartmentId,
   ] =
-    useState<string | null>(
+    useState<
+      string | null
+    >(
       null
     );
 
@@ -230,10 +259,6 @@ export default function SiteReports({
       null
     );
 
-  /*
-   * Keep the deadline countdown
-   * reasonably fresh.
-   */
   useEffect(() => {
     const interval =
       window.setInterval(
@@ -252,10 +277,6 @@ export default function SiteReports({
     };
   }, []);
 
-  /*
-   * When a department is selected on mobile,
-   * bring the report workspace straight into view.
-   */
   useEffect(() => {
     if (
       !selectedDepartmentId
@@ -270,6 +291,7 @@ export default function SiteReports({
             ?.scrollIntoView({
               behavior:
                 "smooth",
+
               block:
                 "start",
             });
@@ -301,7 +323,9 @@ export default function SiteReports({
           .toLowerCase();
 
       return data.departments.filter(
-        (item) => {
+        (
+          item
+        ) => {
           const matchesSearch =
             !normalizedSearch ||
             item.department.name
@@ -360,7 +384,8 @@ export default function SiteReports({
       now.getTime();
 
     if (
-      difference > 0
+      difference >
+      0
     ) {
       const hours =
         Math.floor(
@@ -408,7 +433,9 @@ export default function SiteReports({
 
   const selectedDepartment =
     data?.departments.find(
-      (item) =>
+      (
+        item
+      ) =>
         item.department
           .id ===
         selectedDepartmentId
@@ -416,28 +443,29 @@ export default function SiteReports({
 
   return (
     <div className="p-3 sm:p-6">
-      {/* REPORTING HEADER */}
       <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
-              Daily Reporting
+              Daily
+              Reporting
             </p>
 
             <h3 className="mt-1 text-lg font-semibold text-slate-950 sm:text-xl">
-              {formatDate(
-                reportDate
-              )}
+              {
+                formatDate(
+                  reportDate
+                )
+              }
             </h3>
 
             <p className="mt-1 text-sm text-slate-500">
               Department
-              reports due by
-              20:00.
+              reports due
+              by 20:00.
             </p>
           </div>
 
-          {/* DATE CONTROLS */}
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -460,7 +488,9 @@ export default function SiteReports({
               value={
                 reportDate
               }
-              max={today}
+              max={
+                today
+              }
               onChange={(
                 event
               ) => {
@@ -526,14 +556,17 @@ export default function SiteReports({
             }
             className="mt-3 h-10 w-full rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white sm:hidden"
           >
-            Return to Today
+            Return to
+            Today
           </button>
         )}
 
         {error ? (
           <div className="mt-5 flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-4">
             <p className="text-sm font-medium text-red-700">
-              {error}
+              {
+                error
+              }
             </p>
 
             <button
@@ -548,9 +581,7 @@ export default function SiteReports({
           </div>
         ) : (
           <>
-            {/* REPORTING POSITION */}
             <div className="mt-5 grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-5">
-              {/* SUBMITTED */}
               <div className="col-span-2 rounded-xl bg-slate-950 p-4 text-white xl:col-span-1">
                 <div className="flex items-end justify-between gap-3 xl:block">
                   <div>
@@ -562,10 +593,12 @@ export default function SiteReports({
                       {loading
                         ? "—"
                         : `${
-                            data?.submitted ??
+                            data
+                              ?.submitted ??
                             0
                           }/${
-                            data?.totalDepartments ??
+                            data
+                              ?.totalDepartments ??
                             19
                           }`}
                     </p>
@@ -641,7 +674,6 @@ export default function SiteReports({
               </div>
             </div>
 
-            {/* DEADLINE */}
             <div className="mt-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span
@@ -672,12 +704,7 @@ export default function SiteReports({
         )}
       </section>
 
-      {/* DEPARTMENT AREA */}
       <section className="mt-4 sm:mt-5">
-        {/* LIST HEADER + FILTERS
-            Hidden on mobile while a report is open.
-            Still visible beside the report on XL screens.
-        */}
         <div
           className={`flex-col gap-3 xl:flex xl:flex-row xl:items-end xl:justify-between ${
             selectedDepartmentId
@@ -693,22 +720,25 @@ export default function SiteReports({
 
             <p className="mt-1 text-sm text-slate-500">
               Select a
-              department to
-              complete or
-              review its
-              report.
+              department
+              to complete
+              or review
+              its report.
             </p>
           </div>
 
           <div className="flex min-w-0 flex-col gap-2">
             <input
               type="search"
-              value={search}
+              value={
+                search
+              }
               onChange={(
                 event
               ) =>
                 setSearch(
-                  event.target
+                  event
+                    .target
                     .value
                 )
               }
@@ -716,9 +746,6 @@ export default function SiteReports({
               className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-base text-slate-900 outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200 xl:w-[280px]"
             />
 
-            {/* Horizontal scroll is much cleaner
-                than wrapping five filters on phones.
-            */}
             <div className="-mx-1 overflow-x-auto px-1 pb-1">
               <div className="flex w-max gap-1 rounded-xl bg-slate-100 p-1">
                 {STATUS_FILTERS.map(
@@ -760,13 +787,6 @@ export default function SiteReports({
               : ""
           }`}
         >
-          {/* DEPARTMENT LIST
-              Mobile:
-              hidden as soon as report opens.
-
-              Desktop:
-              stays visible on the left.
-          */}
           <div
             className={`overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm ${
               selectedDepartmentId
@@ -916,7 +936,6 @@ export default function SiteReports({
             )}
           </div>
 
-          {/* SELECTED REPORT */}
           {selectedDepartmentId && (
             <div
               ref={
@@ -924,7 +943,6 @@ export default function SiteReports({
               }
               className="min-w-0 scroll-mt-3"
             >
-              {/* MOBILE REPORT NAVIGATION */}
               <div className="mb-3 xl:hidden">
                 <button
                   type="button"
@@ -958,29 +976,48 @@ export default function SiteReports({
                 </button>
               </div>
 
-              <DepartmentReportPanel
-                departmentId={
-                  selectedDepartmentId
-                }
-                reportDate={
-                  reportDate
-                }
-                onClose={() =>
-                  setSelectedDepartmentId(
-                    null
-                  )
-                }
-                onOpenDate={(
-                  date
-                ) => {
-                  onDateChange(
+              {selectedDepartmentId ===
+              "site-accounts" ? (
+                <SiteAccountsTracker
+                  reportDate={
+                    reportDate
+                  }
+                  onReportDateChange={(
                     date
-                  );
-                }}
-                onReportChanged={() => {
-                  void onRefresh();
-                }}
-              />
+                  ) => {
+                    onDateChange(
+                      date
+                    );
+                  }}
+                  onReportChanged={() => {
+                    void onRefresh();
+                  }}
+                />
+              ) : (
+                <DepartmentReportPanel
+                  departmentId={
+                    selectedDepartmentId
+                  }
+                  reportDate={
+                    reportDate
+                  }
+                  onClose={() =>
+                    setSelectedDepartmentId(
+                      null
+                    )
+                  }
+                  onOpenDate={(
+                    date
+                  ) => {
+                    onDateChange(
+                      date
+                    );
+                  }}
+                  onReportChanged={() => {
+                    void onRefresh();
+                  }}
+                />
+              )}
             </div>
           )}
         </div>

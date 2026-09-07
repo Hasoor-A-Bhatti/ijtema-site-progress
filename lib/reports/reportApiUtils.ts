@@ -1,3 +1,13 @@
+import {
+  SITE_ACCOUNTS_DEPARTMENT_ID,
+  SITE_ACCOUNTS_FIELD_COUNT,
+  isSiteAccountsTrackerValues,
+  normaliseSiteAccountsForm,
+  validateSiteAccountsForSubmission,
+  type SiteAccountsStoredValues,
+  type SiteAccountsTrackerValues,
+} from "@/lib/reports/siteAccTracker";
+
 export const REPORT_TIME_ZONE = "Europe/London";
 export const REPORT_FIELD_COUNT = 7;
 
@@ -25,6 +35,7 @@ export interface DepartmentReportRow extends ReportFormValues {
   report_date: string;
   deadline_at: string;
   submitted_at: string | null;
+  custom_answers?: SiteAccountsTrackerValues | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -127,7 +138,8 @@ export function deriveReportStatus(
       ? new Date(report.deadline_at)
       : deadline;
 
-    return new Date(report.submitted_at).getTime() <= effectiveDeadline.getTime()
+    return new Date(report.submitted_at).getTime() <=
+      effectiveDeadline.getTime()
       ? "completed"
       : "late";
   }
@@ -137,10 +149,39 @@ export function deriveReportStatus(
     : "pending";
 }
 
+export function getReportFieldCount(departmentId: string) {
+  return departmentId === SITE_ACCOUNTS_DEPARTMENT_ID
+    ? SITE_ACCOUNTS_FIELD_COUNT
+    : REPORT_FIELD_COUNT;
+}
+
 export function countCompletedReportFields(
   report: DepartmentReportRow | null
 ) {
   if (!report) return 0;
+
+  if (report.department_id === SITE_ACCOUNTS_DEPARTMENT_ID) {
+    let count = 0;
+
+    if (
+      isSiteAccountsTrackerValues(report.custom_answers) &&
+      report.custom_answers.total_budget !== null
+    ) {
+      count += 1;
+    }
+
+    // Questions 2-5 are the departmental matrix plus the three totals
+    // automatically derived from that matrix.
+    if (isSiteAccountsTrackerValues(report.custom_answers)) {
+      count += 4;
+    }
+
+    if (report.signature_name_aims_id?.trim()) {
+      count += 1;
+    }
+
+    return count;
+  }
 
   let count = 0;
 
@@ -176,7 +217,8 @@ export function normaliseReportForm(input: unknown):
   ) {
     return {
       values: null,
-      error: "Team members on site must be a whole number of 0 or more.",
+      error:
+        "Team members on site must be a whole number of 0 or more.",
     };
   }
 
@@ -202,7 +244,10 @@ export function normaliseReportForm(input: unknown):
   ] as const;
 
   for (const field of textFields) {
-    if (body[field] !== undefined && typeof body[field] !== "string") {
+    if (
+      body[field] !== undefined &&
+      typeof body[field] !== "string"
+    ) {
       return {
         values: null,
         error: "Invalid report text.",
@@ -214,27 +259,35 @@ export function normaliseReportForm(input: unknown):
     error: null,
     values: {
       team_members_on_site:
-        team === null || team === undefined ? null : (team as number),
+        team === null || team === undefined
+          ? null
+          : (team as number),
+
       total_manhours:
         manhours === null || manhours === undefined
           ? null
           : (manhours as number),
+
       todays_activities:
         typeof body.todays_activities === "string"
           ? body.todays_activities.trim()
           : "",
+
       incidents_delays:
         typeof body.incidents_delays === "string"
           ? body.incidents_delays.trim()
           : "",
+
       work_proposed_tomorrow:
         typeof body.work_proposed_tomorrow === "string"
           ? body.work_proposed_tomorrow.trim()
           : "",
+
       additional_comments:
         typeof body.additional_comments === "string"
           ? body.additional_comments.trim()
           : "",
+
       signature_name_aims_id:
         typeof body.signature_name_aims_id === "string"
           ? body.signature_name_aims_id.trim()
@@ -243,7 +296,9 @@ export function normaliseReportForm(input: unknown):
   };
 }
 
-export function validateReportForSubmission(values: ReportFormValues) {
+export function validateReportForSubmission(
+  values: ReportFormValues
+) {
   if (values.team_members_on_site === null) {
     return "Enter the number of team members on site.";
   }
@@ -274,3 +329,12 @@ export function validateReportForSubmission(values: ReportFormValues) {
 
   return null;
 }
+
+export {
+  normaliseSiteAccountsForm,
+  validateSiteAccountsForSubmission,
+};
+
+export type {
+  SiteAccountsStoredValues,
+};

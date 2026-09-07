@@ -36,17 +36,17 @@ const LINE_CONFIG: Record<
 > = {
   metal_tracking: {
     lineWidth: 6.72,
-    hitWidth: 32,
+    hitWidth: 16,
   },
 
   rubber_tracking: {
     lineWidth: 3.024,
-    hitWidth: 28,
+    hitWidth: 14,
   },
 
   fence: {
     lineWidth: 1.512,
-    hitWidth: 8,
+    hitWidth: 4,
   },
 };
 

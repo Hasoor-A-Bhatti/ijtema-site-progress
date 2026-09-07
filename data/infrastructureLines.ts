@@ -85,7 +85,7 @@ export const infrastructureLines: SiteArea[] = [
     name: "Lajna Activity Walk",
     type: "rubber_tracking",
     geometry: "line",
-    points: "1641,580 1584,550 352,768 343,765 312,814",
+    points: "1641,580 1584,550 350,768 285,780",
     status: "not_started",
   },
   {
@@ -217,7 +217,8 @@ export const infrastructureLines: SiteArea[] = [
     name: "Boneyard Road Fence",
     type: "fence",
     geometry: "line",
-    points: "416,585 1446,403 1622,493 1603,528 1568,534 1603,528 1622,493 1691,531 1673,566 1669,586 1673,566 1682,548 1804,614",
+    points:
+      "416,585 1446,403 1622,493 1603,528 1568,534 1603,528 1622,493 1691,531 1673,566 1669,586 1673,566 1682,548 1804,614",
     status: "not_started",
   },
   {
@@ -241,7 +242,7 @@ export const infrastructureLines: SiteArea[] = [
     name: "Pad 1 Fence",
     type: "fence",
     geometry: "line",
-    points: "1433,1185 1424,1199 1459,1218 1467,1203 1459,1218 1460,1239 1407,1337",
+    points: "1408,1334 1489,1185 1480,1167",
     status: "not_started",
   },
   {
@@ -281,7 +282,7 @@ export const infrastructureLines: SiteArea[] = [
     name: "Lajna Bazaar Fence",
     type: "fence",
     geometry: "line",
-    points: "560,940 476,893 466,910 429,892 438,874 351,828 322,880 341,890 308,872 322,880 185,1141 221,1072 430,1184",
+    points: "560,936 458,884 449,900 411,882 421,863 316,808 185,1053 431,1183 221,1072 185,1142",
     status: "not_started",
   },
   {
@@ -345,7 +346,7 @@ export const infrastructureLines: SiteArea[] = [
     name: "Car Park Road Fence",
     type: "fence",
     geometry: "line",
-    points: "165,2111 165,1360 159,1341 126,1324 159,1341 165,1360 165,1933 179,1918 278,1919",
+    points: "165,2111 165,1360 159,1341 126,1324 159,1341 165,1360 165,1953 184,1950 284,1950",
     status: "not_started",
   },
   {
@@ -356,7 +357,6 @@ export const infrastructureLines: SiteArea[] = [
     points: "1354,1563 1247,1759 1357,1818 1461,1620 1354,1563",
     status: "not_started",
   },
-
   {
     id: "lajna-funfair-fence",
     name: "Lajna Funfair Fence",
@@ -364,5 +364,5 @@ export const infrastructureLines: SiteArea[] = [
     geometry: "line",
     points: "414,585 239,616 222,625 135,780 275,855",
     status: "not_started",
-},
+  },
 ];
