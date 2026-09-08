@@ -7,6 +7,8 @@ import type {
   DashboardMetrics,
 } from "@/hooks/useDashboardData";
 
+import SiteExpenseTracker from "./SiteExpenseTracker";
+
 
 interface SiteSummaryProps {
   metrics: DashboardMetrics;
@@ -564,6 +566,9 @@ export default function SiteSummary({
           ))}
         </div>
       </section>
+
+      {/* SITE EXPENSE TRACKER */}
+      <SiteExpenseTracker />
 
       <footer className="mt-5 flex items-center justify-between gap-4 px-1 text-xs text-slate-400">
         <p>

@@ -5,11 +5,19 @@ export const infrastructureLines: SiteArea[] = [
    * METAL TRACKING
    */
   {
-    id: "boneyard-road-tracking",
-    name: "Boneyard Road",
+    id: "boneyard-road-1-tracking",
+    name: "Boneyard Road 1",
     type: "metal_tracking",
     geometry: "line",
-    points: "57,621 1444,376 1842,582",
+    points: "1842,581 1446,373",
+    status: "not_started",
+  },
+  {
+    id: "boneyard-road-2-tracking",
+    name: "Boneyard Road 2",
+    type: "metal_tracking",
+    geometry: "line",
+    points: "1445,378 51,623",
     status: "not_started",
   },
   {

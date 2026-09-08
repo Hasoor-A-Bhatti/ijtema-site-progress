@@ -237,15 +237,8 @@ export const siteAreas: SiteArea[] = [
     points: "895,1446 891,1454 919,1474 922,1468",
     status: "not_started",
   },
-  {
-    id: "mta",
-    name: "MTA",
-    type: "marquee",
-    points: "993,1487 1083,1535 1060,1579 970,1531",
-    status: "not_started",
-  },
 
-  // Point order corrected to prevent a self-crossing polygon.
+  // MTA removed
   {
     id: "mens-av-store",
     name: "Mens AV Store",
@@ -339,7 +332,7 @@ export const siteAreas: SiteArea[] = [
   },
   {
     id: "unallocated-marquee",
-    name: "Unallocated Marquee",
+    name: "Isaar Marquee",
     type: "marquee",
     points: "920,1974 895,2019 986,2067 1009,2022",
     status: "not_started",
@@ -349,6 +342,20 @@ export const siteAreas: SiteArea[] = [
     name: "Ansar Main Entrance",
     type: "marquee",
     points: "945,1927 1035,1975 1011,2019 921,1972",
+    status: "not_started",
+  },
+  {
+    id: "ansar-first-aid-cabin",
+    name: "Ansar First Aid Cabin",
+    type: "cabin",
+    points: "989,1903 964,1890 969,1881 993,1894",
+    status: "not_started",
+  },
+  {
+    id: "ansar-homeopathy-cabin",
+    name: "Ansar Homeopathy Cabin",
+    type: "cabin",
+    points: "998,1893 1022,1905 1016,1916 991,1905",
     status: "not_started",
   },
   {
