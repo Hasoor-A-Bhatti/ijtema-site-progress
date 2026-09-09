@@ -94,8 +94,19 @@ export async function GET() {
       "report_date",
       START_DATE
     )
+    .not(
+      "submitted_at",
+      "is",
+      null
+    )
     .order(
       "report_date",
+      {
+        ascending: false,
+      }
+    )
+    .order(
+      "submitted_at",
       {
         ascending: false,
       }
@@ -138,17 +149,23 @@ export async function GET() {
       })
     );
 
+  /*
+   * IMPORTANT:
+   * The dashboard uses ONLY the most recent submitted
+   * Site Accounts report when calculating the current
+   * financial position.
+   *
+   * It does NOT add together the Paid totals from
+   * previous reporting days.
+   */
+  const latestReport =
+    reports[0] ??
+    null;
+
   const totalPaid =
     roundMoney(
-      reports.reduce(
-        (
-          sum,
-          report
-        ) =>
-          sum +
-          report.paid,
+      latestReport?.paid ??
         0
-      )
     );
 
   const remainingBudget =
@@ -218,7 +235,7 @@ export async function GET() {
       reports.length,
 
     latestReportDate:
-      reports[0]
+      latestReport
         ?.reportDate ??
       null,
 

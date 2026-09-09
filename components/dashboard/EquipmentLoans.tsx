@@ -3,6 +3,7 @@
 import {
   FormEvent,
   KeyboardEvent,
+  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -11,7 +12,7 @@ import useEquipmentLoans from "@/hooks/useEquipmentLoans";
 import { getLondonDateString } from "@/lib/equipmentLoans/loanUtils";
 
 import type {
-  EquipmentLoanItemView,
+  EquipmentBookingGroup,
   EquipmentLoanStatus,
   NewEquipmentLoanItem,
   RecentBorrower,
@@ -19,19 +20,18 @@ import type {
 
 type LoanFilter = "all" | "out" | "late" | "returned";
 
-interface EquipmentLoansProps {
-  enabled: boolean;
+interface EquipmentPortalSession {
+  username: string;
+  bookingGroup: EquipmentBookingGroup;
+  label: string;
+}
+
+interface EquipmentPortalUser extends EquipmentPortalSession {
+  password: string;
 }
 
 interface DraftItem extends NewEquipmentLoanItem {
   localId: string;
-}
-
-interface PartialReturnState {
-  itemId: string;
-  itemName: string;
-  quantity: number;
-  quantityReturned: number;
 }
 
 const FILTERS: Array<{
@@ -42,6 +42,30 @@ const FILTERS: Array<{
   { value: "out", label: "Out" },
   { value: "late", label: "Late" },
   { value: "returned", label: "Returned" },
+];
+
+const EQUIPMENT_SESSION_KEY =
+  "ijtema_equipment_portal_session";
+
+const EQUIPMENT_USERS: EquipmentPortalUser[] = [
+  {
+    username: "Admin",
+    password: "Admin123@",
+    bookingGroup: "admin",
+    label: "Admin",
+  },
+  {
+    username: "AnsarUk",
+    password: "Ansar123@",
+    bookingGroup: "ansar",
+    label: "Ansar",
+  },
+  {
+    username: "KhuddamUk",
+    password: "Khuddam123@",
+    bookingGroup: "khuddam",
+    label: "Khuddam",
+  },
 ];
 
 function addDays(date: string, amount: number) {
@@ -80,38 +104,27 @@ function statusStyle(status: EquipmentLoanStatus) {
     case "late":
       return {
         label: "Late",
-        classes: "bg-red-100 text-red-700",
+        classes: "bg-red-50 text-red-700",
       };
 
     case "returned":
       return {
         label: "Returned",
-        classes: "bg-emerald-100 text-emerald-700",
+        classes: "bg-emerald-50 text-emerald-700",
       };
 
     case "returned_late":
       return {
         label: "Returned Late",
-        classes: "bg-amber-100 text-amber-700",
+        classes: "bg-amber-50 text-amber-700",
       };
 
     default:
       return {
         label: "Out",
-        classes: "bg-blue-100 text-blue-700",
+        classes: "bg-blue-50 text-blue-700",
       };
   }
-}
-
-function returnedCount(item: EquipmentLoanItemView) {
-  const value =
-    item.quantity_returned ??
-    (item.returned_at ? item.quantity : 0);
-
-  return Math.min(
-    item.quantity,
-    Math.max(0, value)
-  );
 }
 
 function SummaryCard({
@@ -138,10 +151,33 @@ function SummaryCard({
   );
 }
 
-export default function EquipmentLoans({
-  enabled,
-}: EquipmentLoansProps) {
+export default function EquipmentLoans() {
   const today = getLondonDateString();
+
+  const [
+    portalSession,
+    setPortalSession,
+  ] = useState<EquipmentPortalSession | null>(null);
+
+  const [
+    sessionLoading,
+    setSessionLoading,
+  ] = useState(true);
+
+  const [
+    loginUsername,
+    setLoginUsername,
+  ] = useState("");
+
+  const [
+    loginPassword,
+    setLoginPassword,
+  ] = useState("");
+
+  const [
+    loginError,
+    setLoginError,
+  ] = useState<string | null>(null);
 
   const [loanDate, setLoanDate] = useState(today);
   const [search, setSearch] = useState("");
@@ -157,35 +193,16 @@ export default function EquipmentLoans({
   const [itemQuantity, setItemQuantity] = useState(1);
   const [draftItems, setDraftItems] = useState<DraftItem[]>([]);
 
-  const [newLoanError, setNewLoanError] =
-    useState<string | null>(null);
-
-  const [inlineError, setInlineError] =
-    useState<string | null>(null);
+  const [newLoanError, setNewLoanError] = useState<string | null>(null);
+  const [inlineError, setInlineError] = useState<string | null>(null);
 
   const [issuing, setIssuing] = useState(false);
+  const [changingItemId, setChangingItemId] = useState<string | null>(null);
+  const [returningLoanId, setReturningLoanId] = useState<string | null>(null);
 
-  const [changingItemId, setChangingItemId] =
-    useState<string | null>(null);
-
-  const [returningLoanId, setReturningLoanId] =
-    useState<string | null>(null);
-
-  const [addingToLoanId, setAddingToLoanId] =
-    useState<string | null>(null);
-
+  const [addingToLoanId, setAddingToLoanId] = useState<string | null>(null);
   const [extraItemName, setExtraItemName] = useState("");
   const [extraItemQuantity, setExtraItemQuantity] = useState(1);
-
-  /*
-   * Partial return sheet.
-   */
-  const [partialReturn, setPartialReturn] =
-    useState<PartialReturnState | null>(null);
-
-  const [returnNow, setReturnNow] = useState(1);
-  const [savingPartialReturn, setSavingPartialReturn] =
-    useState(false);
 
   const {
     data,
@@ -196,11 +213,115 @@ export default function EquipmentLoans({
     addItem,
     setItemReturned,
     setItemsReturned,
-    setItemReturnedQuantity,
-  } = useEquipmentLoans(loanDate, enabled);
+  } = useEquipmentLoans(
+    loanDate,
+    portalSession?.bookingGroup ?? null,
+    Boolean(portalSession)
+  );
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      try {
+        const saved =
+          window.sessionStorage.getItem(
+            EQUIPMENT_SESSION_KEY
+          );
+
+        if (saved) {
+          const parsed =
+            JSON.parse(
+              saved
+            ) as Partial<EquipmentPortalSession>;
+
+          if (
+            typeof parsed.username === "string" &&
+            typeof parsed.label === "string" &&
+            (
+              parsed.bookingGroup === "admin" ||
+              parsed.bookingGroup === "ansar" ||
+              parsed.bookingGroup === "khuddam"
+            )
+          ) {
+            setPortalSession({
+              username: parsed.username,
+              bookingGroup: parsed.bookingGroup,
+              label: parsed.label,
+            });
+          }
+        }
+      } catch {
+        window.sessionStorage.removeItem(
+          EQUIPMENT_SESSION_KEY
+        );
+      } finally {
+        setSessionLoading(false);
+      }
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, []);
+
+  function handlePortalLogin(
+    event: FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
+    setLoginError(null);
+
+    const match =
+      EQUIPMENT_USERS.find(
+        (user) =>
+          user.username === loginUsername.trim() &&
+          user.password === loginPassword
+      );
+
+    if (!match) {
+      setLoginError(
+        "Incorrect username or password."
+      );
+      return;
+    }
+
+    const session: EquipmentPortalSession = {
+      username: match.username,
+      bookingGroup: match.bookingGroup,
+      label: match.label,
+    };
+
+    window.sessionStorage.setItem(
+      EQUIPMENT_SESSION_KEY,
+      JSON.stringify(session)
+    );
+
+    setPortalSession(session);
+    setLoginPassword("");
+    setLoginError(null);
+  }
+
+  function logoutPortal() {
+    window.sessionStorage.removeItem(
+      EQUIPMENT_SESSION_KEY
+    );
+
+    setPortalSession(null);
+    setLoginUsername("");
+    setLoginPassword("");
+    setLoginError(null);
+
+    setShowNewLoan(false);
+    setSearch("");
+    setFilter("all");
+    setLoanDate(today);
+    resetNewLoan();
+  }
 
   const isToday = loanDate === today;
 
+  /*
+   * Existing entries become autocomplete suggestions.
+   * There is still no permanent tool catalogue.
+   */
   const toolSuggestions = useMemo(() => {
     const names = new Set<string>();
 
@@ -208,9 +329,7 @@ export default function EquipmentLoans({
       loan.items.forEach((item) => names.add(item.item_name))
     );
 
-    return Array.from(names).sort((a, b) =>
-      a.localeCompare(b)
-    );
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
   }, [data]);
 
   const filteredLoans = useMemo(() => {
@@ -221,15 +340,9 @@ export default function EquipmentLoans({
     return data.loans.filter((loan) => {
       const matchesSearch =
         !query ||
-        loan.department_name_snapshot
-          .toLowerCase()
-          .includes(query) ||
-        loan.borrower_name
-          .toLowerCase()
-          .includes(query) ||
-        loan.borrower_aims_id
-          .toLowerCase()
-          .includes(query) ||
+        loan.department_name_snapshot.toLowerCase().includes(query) ||
+        loan.borrower_name.toLowerCase().includes(query) ||
+        loan.borrower_aims_id.toLowerCase().includes(query) ||
         loan.items.some((item) =>
           item.item_name.toLowerCase().includes(query)
         );
@@ -266,6 +379,10 @@ export default function EquipmentLoans({
     resetNewLoan();
   }
 
+  /*
+   * Normal helper — deliberately NOT named "use..."
+   * so React doesn't interpret it as a hook.
+   */
   function applyRecentBorrower(borrower: RecentBorrower) {
     setDepartmentId(borrower.departmentId);
     setBorrowerName(borrower.borrowerName);
@@ -277,9 +394,7 @@ export default function EquipmentLoans({
     const cleanName = itemName.trim();
 
     if (!cleanName) {
-      setNewLoanError(
-        "Enter the name of the tool or equipment."
-      );
+      setNewLoanError("Enter the name of the tool or equipment.");
       return;
     }
 
@@ -291,8 +406,7 @@ export default function EquipmentLoans({
     setDraftItems((current) => {
       const existing = current.find(
         (item) =>
-          item.item_name.toLowerCase() ===
-          cleanName.toLowerCase()
+          item.item_name.toLowerCase() === cleanName.toLowerCase()
       );
 
       if (existing) {
@@ -321,18 +435,14 @@ export default function EquipmentLoans({
     setNewLoanError(null);
   }
 
-  function handleToolKeyDown(
-    event: KeyboardEvent<HTMLInputElement>
-  ) {
+  function handleToolKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (event.key !== "Enter") return;
 
     event.preventDefault();
     addDraftItem();
   }
 
-  async function handleCreateLoan(
-    event: FormEvent<HTMLFormElement>
-  ) {
+  async function handleCreateLoan(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!departmentId) {
@@ -350,7 +460,7 @@ export default function EquipmentLoans({
       return;
     }
 
-    if (!draftItems.length) {
+    if (draftItems.length === 0) {
       setNewLoanError("Add at least one tool to the loan.");
       return;
     }
@@ -362,7 +472,6 @@ export default function EquipmentLoans({
       departmentId,
       borrowerName: borrowerName.trim(),
       borrowerAimsId: borrowerAimsId.trim(),
-
       items: draftItems.map(({ item_name, quantity }) => ({
         item_name,
         quantity,
@@ -373,8 +482,7 @@ export default function EquipmentLoans({
 
     if (!result.success) {
       setNewLoanError(
-        result.error ??
-          "The equipment loan could not be created."
+        result.error ?? "The equipment loan could not be created."
       );
       return;
     }
@@ -383,142 +491,37 @@ export default function EquipmentLoans({
     resetNewLoan();
   }
 
-  /*
-   * Quantity = 1 keeps the quick checkbox workflow.
-   */
-  async function toggleSingleReturned(
-    item: EquipmentLoanItemView
+  async function toggleReturned(
+    itemId: string,
+    currentlyReturned: boolean
   ) {
-    const returned = returnedCount(item) >= item.quantity;
-
     if (
-      returned &&
-      !window.confirm(
-        "Mark this item as outstanding again?"
-      )
+      currentlyReturned &&
+      !window.confirm("Mark this item as outstanding again?")
     ) {
       return;
     }
 
-    setChangingItemId(item.id);
+    setChangingItemId(itemId);
     setInlineError(null);
 
-    const result = await setItemReturned(
-      item.id,
-      !returned
-    );
+    const result = await setItemReturned(itemId, !currentlyReturned);
 
     setChangingItemId(null);
 
     if (!result.success) {
       setInlineError(
-        result.error ??
-          "The equipment return could not be updated."
-      );
-    }
-  }
-
-  /*
-   * Quantity >1 opens the partial-return sheet.
-   */
-  function openPartialReturn(item: EquipmentLoanItemView) {
-    const alreadyReturned = returnedCount(item);
-
-    setPartialReturn({
-      itemId: item.id,
-      itemName: item.item_name,
-      quantity: item.quantity,
-      quantityReturned: alreadyReturned,
-    });
-
-    setReturnNow(1);
-    setInlineError(null);
-  }
-
-  function closePartialReturn() {
-    if (savingPartialReturn) return;
-
-    setPartialReturn(null);
-    setReturnNow(1);
-  }
-
-  async function confirmPartialReturn() {
-    if (!partialReturn) return;
-
-    const outstanding =
-      partialReturn.quantity -
-      partialReturn.quantityReturned;
-
-    const amount = Math.min(
-      Math.max(returnNow, 1),
-      outstanding
-    );
-
-    const newTotal =
-      partialReturn.quantityReturned + amount;
-
-    setSavingPartialReturn(true);
-
-    const result = await setItemReturnedQuantity(
-      partialReturn.itemId,
-      newTotal
-    );
-
-    setSavingPartialReturn(false);
-
-    if (!result.success) {
-      setInlineError(
-        result.error ??
-          "The partial return could not be recorded."
-      );
-      return;
-    }
-
-    setPartialReturn(null);
-    setReturnNow(1);
-  }
-
-  async function reopenMultiItem(
-    item: EquipmentLoanItemView
-  ) {
-    if (
-      !window.confirm(
-        `Mark all ${item.quantity} × ${item.item_name} as outstanding again?`
-      )
-    ) {
-      return;
-    }
-
-    setChangingItemId(item.id);
-    setInlineError(null);
-
-    const result = await setItemReturnedQuantity(
-      item.id,
-      0
-    );
-
-    setChangingItemId(null);
-
-    if (!result.success) {
-      setInlineError(
-        result.error ??
-          "The equipment return could not be changed."
+        result.error ?? "The equipment return could not be updated."
       );
     }
   }
 
   async function returnAll(loanId: string) {
-    const loan = data?.loans.find(
-      (item) => item.id === loanId
-    );
-
+    const loan = data?.loans.find((item) => item.id === loanId);
     if (!loan) return;
 
     const outstandingIds = loan.items
-      .filter(
-        (item) =>
-          returnedCount(item) < item.quantity
-      )
+      .filter((item) => !item.returned_at)
       .map((item) => item.id);
 
     if (!outstandingIds.length) return;
@@ -534,17 +537,13 @@ export default function EquipmentLoans({
     setReturningLoanId(loanId);
     setInlineError(null);
 
-    const result = await setItemsReturned(
-      outstandingIds,
-      true
-    );
+    const result = await setItemsReturned(outstandingIds, true);
 
     setReturningLoanId(null);
 
     if (!result.success) {
       setInlineError(
-        result.error ??
-          "Not all equipment could be marked returned."
+        result.error ?? "Not all equipment could be marked returned."
       );
     }
   }
@@ -557,10 +556,7 @@ export default function EquipmentLoans({
       return;
     }
 
-    if (
-      !Number.isInteger(extraItemQuantity) ||
-      extraItemQuantity < 1
-    ) {
+    if (!Number.isInteger(extraItemQuantity) || extraItemQuantity < 1) {
       setInlineError("Quantity must be at least 1.");
       return;
     }
@@ -574,9 +570,7 @@ export default function EquipmentLoans({
     );
 
     if (!result.success) {
-      setInlineError(
-        result.error ?? "The tool could not be added."
-      );
+      setInlineError(result.error ?? "The tool could not be added.");
       return;
     }
 
@@ -585,17 +579,98 @@ export default function EquipmentLoans({
     setExtraItemQuantity(1);
   }
 
-  const partialOutstanding = partialReturn
-    ? partialReturn.quantity -
-      partialReturn.quantityReturned
-    : 0;
+  if (sessionLoading) {
+    return (
+      <div className="p-4 sm:p-6">
+        <div className="mx-auto max-w-md rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+          <div className="mx-auto h-10 w-10 animate-pulse rounded-full bg-slate-200" />
 
-  const partialAfterReturn = partialReturn
-    ? Math.min(
-        partialReturn.quantity,
-        partialReturn.quantityReturned + returnNow
-      )
-    : 0;
+          <p className="mt-4 text-sm font-medium text-slate-500">
+            Loading Equipment Loans…
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!portalSession) {
+    return (
+      <div className="flex min-h-[520px] items-center justify-center p-4 sm:p-6">
+        <div className="w-full max-w-md overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+          <div className="bg-slate-950 px-6 py-6 text-white">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+              Equipment Control
+            </p>
+
+            <h2 className="mt-1 text-2xl font-semibold">
+              Equipment Loans Access
+            </h2>
+
+            <p className="mt-2 text-sm leading-6 text-slate-300">
+              Sign in with your allocated equipment control account.
+            </p>
+          </div>
+
+          <form
+            onSubmit={handlePortalLogin}
+            className="p-6"
+          >
+            <label className="block">
+              <span className="text-sm font-semibold text-slate-700">
+                Username
+              </span>
+
+              <input
+                type="text"
+                autoComplete="username"
+                autoCapitalize="none"
+                value={loginUsername}
+                onChange={(event) =>
+                  setLoginUsername(event.target.value)
+                }
+                className="mt-2 h-12 w-full rounded-xl border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+                placeholder="Enter username"
+              />
+            </label>
+
+            <label className="mt-4 block">
+              <span className="text-sm font-semibold text-slate-700">
+                Password
+              </span>
+
+              <input
+                type="password"
+                autoComplete="current-password"
+                value={loginPassword}
+                onChange={(event) =>
+                  setLoginPassword(event.target.value)
+                }
+                className="mt-2 h-12 w-full rounded-xl border border-slate-300 bg-white px-3 text-base text-slate-950 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+                placeholder="Enter password"
+              />
+            </label>
+
+            {loginError && (
+              <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-3 text-sm font-medium text-red-700">
+                {loginError}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              className="mt-5 min-h-12 w-full rounded-xl bg-slate-950 px-5 text-sm font-semibold text-white transition hover:bg-slate-800"
+            >
+              Sign In
+            </button>
+
+            <p className="mt-4 text-center text-xs leading-5 text-slate-400">
+              Your session remains active in this browser tab until you log out or close the tab.
+            </p>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-3 sm:p-6">
@@ -612,19 +687,28 @@ export default function EquipmentLoans({
             </h3>
 
             <p className="mt-1 text-sm text-slate-500">
-              All tools are due back by 23:00.
+              {portalSession.label} bookings only · All tools are due back by 23:00.
             </p>
           </div>
 
-          {/* MOBILE-FRIENDLY DATE CONTROLS */}
-          <div className="grid grid-cols-[44px_minmax(0,1fr)_44px] gap-2 sm:flex sm:flex-wrap">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">
+              {portalSession.label} Portal
+            </span>
+
+            <button
+              type="button"
+              onClick={logoutPortal}
+              className="min-h-10 rounded-xl border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+            >
+              Log Out
+            </button>
+
             <button
               type="button"
               aria-label="Previous day"
-              onClick={() =>
-                setLoanDate(addDays(loanDate, -1))
-              }
-              className="flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white text-lg text-slate-700 hover:bg-slate-50 sm:w-11"
+              onClick={() => setLoanDate(addDays(loanDate, -1))}
+              className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-300 bg-white text-lg text-slate-700 hover:bg-slate-50"
             >
               ←
             </button>
@@ -634,20 +718,17 @@ export default function EquipmentLoans({
               value={loanDate}
               max={today}
               onChange={(event) =>
-                event.target.value &&
-                setLoanDate(event.target.value)
+                event.target.value && setLoanDate(event.target.value)
               }
-              className="h-11 min-w-0 rounded-xl border border-slate-300 bg-white px-2 text-sm font-medium text-slate-950 sm:w-auto sm:px-3"
+              className="h-11 min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-2 text-sm font-medium text-slate-700 sm:flex-none sm:px-3 sm:text-base"
             />
 
             <button
               type="button"
               aria-label="Next day"
               disabled={loanDate >= today}
-              onClick={() =>
-                setLoanDate(addDays(loanDate, 1))
-              }
-              className="flex h-11 items-center justify-center rounded-xl border border-slate-300 bg-white text-lg text-slate-700 disabled:opacity-35 sm:w-11"
+              onClick={() => setLoanDate(addDays(loanDate, 1))}
+              className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-300 bg-white text-lg text-slate-700 hover:bg-slate-50 disabled:opacity-35"
             >
               →
             </button>
@@ -656,7 +737,7 @@ export default function EquipmentLoans({
               <button
                 type="button"
                 onClick={() => setShowNewLoan(true)}
-                className="col-span-3 min-h-11 rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800 sm:col-span-1"
+                className="min-h-11 rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800"
               >
                 + New Loan
               </button>
@@ -664,7 +745,7 @@ export default function EquipmentLoans({
               <button
                 type="button"
                 onClick={() => setLoanDate(today)}
-                className="col-span-3 min-h-11 rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white sm:col-span-1"
+                className="min-h-11 rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white"
               >
                 Today
               </button>
@@ -676,22 +757,14 @@ export default function EquipmentLoans({
         <div className="mt-5 grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
           <SummaryCard
             label="Out Now"
-            value={
-              loading
-                ? "—"
-                : data?.summary.outstanding ?? 0
-            }
+            value={loading ? "—" : data?.summary.outstanding ?? 0}
             caption="items outstanding"
             className="bg-slate-950 text-white"
           />
 
           <SummaryCard
             label="Late"
-            value={
-              loading
-                ? "—"
-                : data?.summary.late ?? 0
-            }
+            value={loading ? "—" : data?.summary.late ?? 0}
             caption="past 23:00"
             className={
               (data?.summary.late ?? 0) > 0
@@ -702,22 +775,14 @@ export default function EquipmentLoans({
 
           <SummaryCard
             label="Active Loans"
-            value={
-              loading
-                ? "—"
-                : data?.summary.activeLoans ?? 0
-            }
+            value={loading ? "—" : data?.summary.activeLoans ?? 0}
             caption="open ledgers"
             className="bg-blue-50 text-blue-700"
           />
 
           <SummaryCard
             label="Returned"
-            value={
-              loading
-                ? "—"
-                : data?.summary.returned ?? 0
-            }
+            value={loading ? "—" : data?.summary.returned ?? 0}
             caption="items returned"
             className="bg-emerald-50 text-emerald-700"
           />
@@ -729,7 +794,7 @@ export default function EquipmentLoans({
           </span>
 
           <span className="text-xs font-medium text-slate-500">
-            Return deadline: 23:00
+            Return deadline: 23:00 Europe/London
           </span>
         </div>
       </section>
@@ -757,15 +822,7 @@ export default function EquipmentLoans({
             {lateLoans.map((loan) => {
               const lateQuantity = loan.items
                 .filter((item) => item.status === "late")
-                .reduce(
-                  (sum, item) =>
-                    sum +
-                    Math.max(
-                      item.quantity - returnedCount(item),
-                      0
-                    ),
-                  0
-                );
+                .reduce((sum, item) => sum + item.quantity, 0);
 
               return (
                 <div
@@ -778,8 +835,7 @@ export default function EquipmentLoans({
                     </p>
 
                     <p className="mt-1 text-xs text-slate-500">
-                      {loan.borrower_name} · AIMS{" "}
-                      {loan.borrower_aims_id}
+                      {loan.borrower_name} · AIMS {loan.borrower_aims_id}
                     </p>
                   </div>
 
@@ -799,7 +855,7 @@ export default function EquipmentLoans({
         </section>
       )}
 
-      {/* ERROR */}
+      {/* ERRORS */}
       {(error || inlineError) && (
         <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-4">
           <p className="text-sm font-medium text-red-700">
@@ -812,7 +868,7 @@ export default function EquipmentLoans({
               setInlineError(null);
               void refresh();
             }}
-            className="shrink-0 rounded-lg bg-white px-3 py-2 text-sm font-semibold text-red-700"
+            className="rounded-lg bg-white px-3 py-2 text-sm font-semibold text-red-700"
           >
             Retry
           </button>
@@ -828,8 +884,7 @@ export default function EquipmentLoans({
             </h3>
 
             <p className="mt-1 text-sm text-slate-500">
-              Manage loans, partial returns and outstanding
-              equipment.
+              Manage loans, returns and outstanding equipment.
             </p>
           </div>
 
@@ -837,11 +892,9 @@ export default function EquipmentLoans({
             <input
               type="search"
               value={search}
-              onChange={(event) =>
-                setSearch(event.target.value)
-              }
+              onChange={(event) => setSearch(event.target.value)}
               placeholder="Search department, person, AIMS or tool..."
-              className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-base font-medium text-slate-950 placeholder:font-normal placeholder:text-slate-400 outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200 lg:w-[340px]"
+              className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-base outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200 lg:w-[340px]"
             />
 
             <div className="-mx-1 overflow-x-auto px-1 pb-1">
@@ -901,40 +954,38 @@ export default function EquipmentLoans({
           <div className="mt-4 space-y-4">
             {filteredLoans.map((loan) => {
               const presentation = statusStyle(loan.status);
-
               const outstandingItems = loan.items.filter(
-                (item) =>
-                  returnedCount(item) < item.quantity
+                (item) => !item.returned_at
               );
 
               return (
                 <article
                   key={loan.id}
-                  className={`overflow-hidden rounded-2xl border shadow-sm ${
+                  className={`overflow-hidden rounded-2xl border bg-white shadow-sm ${
                     loan.status === "late"
-                      ? "border-red-200 bg-red-50/30"
-                      : "border-slate-300 bg-slate-100/70"
+                      ? "border-red-200"
+                      : "border-slate-200"
                   }`}
                 >
                   {/* LOAN HEADER */}
                   <div
                     className={`border-b px-4 py-4 sm:px-5 ${
                       loan.status === "late"
-                        ? "border-red-200 bg-red-50"
-                        : "border-slate-300 bg-slate-100"
+                        ? "border-red-100 bg-red-50/50"
+                        : "border-slate-100 bg-slate-50"
                     }`}
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0">
-                        <p className="text-base font-bold text-slate-950">
+                        <p className="text-base font-semibold text-slate-950">
                           {loan.department_name_snapshot}
                         </p>
 
-                        <p className="mt-1 text-sm font-medium text-slate-700">
+                        <p className="mt-1 text-sm text-slate-600">
                           {loan.borrower_name}
                         </p>
 
-                        <p className="mt-0.5 text-xs font-medium text-slate-500">
+                        <p className="mt-0.5 text-xs text-slate-500">
                           AIMS {loan.borrower_aims_id}
                         </p>
                       </div>
@@ -946,237 +997,98 @@ export default function EquipmentLoans({
                       </span>
                     </div>
 
-                    <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs font-medium text-slate-500">
+                    <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-500">
                       <span>
                         Issued{" "}
-                        <strong className="text-slate-800">
+                        <strong className="text-slate-700">
                           {formatTime(loan.issued_at)}
                         </strong>
                       </span>
 
                       <span>
-                        Due{" "}
-                        <strong className="text-slate-800">
-                          23:00
-                        </strong>
+                        Due <strong className="text-slate-700">23:00</strong>
                       </span>
 
-                      <span className="font-semibold text-slate-700">
+                      <span>
                         {loan.outstandingQuantity} outstanding
                       </span>
                     </div>
                   </div>
 
                   {/* ITEMS */}
-                  <div className="divide-y divide-slate-200 bg-white/90">
+                  <div className="divide-y divide-slate-100">
                     {loan.items.map((item) => {
-                      const itemPresentation =
-                        statusStyle(item.status);
+                      const returned = Boolean(item.returned_at);
+                      const updating = changingItemId === item.id;
+                      const itemPresentation = statusStyle(item.status);
 
-                      const returned = returnedCount(item);
-                      const outstanding =
-                        item.quantity - returned;
-
-                      const fullyReturned =
-                        outstanding === 0;
-
-                      const partial =
-                        returned > 0 && outstanding > 0;
-
-                      const updating =
-                        changingItemId === item.id;
-
-                      /*
-                       * SINGLE ITEM
-                       */
-                      if (item.quantity === 1) {
-                        return (
-                          <div
-                            key={item.id}
-                            className="flex items-center gap-3 px-4 py-3.5 sm:px-5"
+                      return (
+                        <div
+                          key={item.id}
+                          className="flex items-center gap-3 px-4 py-3.5 sm:px-5"
+                        >
+                          <button
+                            type="button"
+                            disabled={updating}
+                            onClick={() =>
+                              void toggleReturned(item.id, returned)
+                            }
+                            aria-label={
+                              returned
+                                ? `Mark ${item.item_name} outstanding`
+                                : `Mark ${item.item_name} returned`
+                            }
+                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border text-sm font-bold transition disabled:opacity-50 ${
+                              returned
+                                ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                                : item.status === "late"
+                                  ? "border-red-300 bg-red-50 text-red-600"
+                                  : "border-slate-300 bg-white text-slate-400"
+                            }`}
                           >
-                            <button
-                              type="button"
-                              disabled={updating}
-                              onClick={() =>
-                                void toggleSingleReturned(item)
-                              }
-                              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border text-sm font-bold transition disabled:opacity-50 ${
-                                fullyReturned
-                                  ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-                                  : item.status === "late"
-                                    ? "border-red-300 bg-red-50 text-red-600"
-                                    : "border-slate-300 bg-white text-slate-400"
-                              }`}
-                              aria-label={
-                                fullyReturned
-                                  ? `Mark ${item.item_name} outstanding`
-                                  : `Mark ${item.item_name} returned`
-                              }
-                            >
-                              {updating
-                                ? "…"
-                                : fullyReturned
-                                  ? "✓"
-                                  : ""}
-                            </button>
+                            {updating ? "…" : returned ? "✓" : ""}
+                          </button>
 
-                            <div className="min-w-0 flex-1">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
                               <p
                                 className={`text-sm font-semibold ${
-                                  fullyReturned
+                                  returned
                                     ? "text-slate-400 line-through"
-                                    : "text-slate-950"
+                                    : "text-slate-900"
                                 }`}
                               >
                                 {item.item_name}
                               </p>
 
-                              <p className="mt-1 text-xs font-medium text-slate-500">
-                                {fullyReturned
-                                  ? `Returned ${formatTime(
-                                      item.returned_at
-                                    )}`
-                                  : item.status === "late"
-                                    ? "Not returned by 23:00"
-                                    : "Currently out"}
-                              </p>
-                            </div>
-
-                            <span
-                              className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold ${itemPresentation.classes}`}
-                            >
-                              {itemPresentation.label}
-                            </span>
-                          </div>
-                        );
-                      }
-
-                      /*
-                       * MULTI-QUANTITY ITEM
-                       */
-                      return (
-                        <div
-                          key={item.id}
-                          className="px-4 py-4 sm:px-5"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <p
-                                  className={`text-sm font-semibold ${
-                                    fullyReturned
-                                      ? "text-slate-400 line-through"
-                                      : "text-slate-950"
-                                  }`}
-                                >
-                                  {item.item_name}
-                                </p>
-
-                                <span className="rounded-md bg-slate-200 px-2 py-0.5 text-xs font-bold text-slate-700">
+                              {item.quantity > 1 && (
+                                <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
                                   ×{item.quantity}
                                 </span>
-                              </div>
-
-                              {fullyReturned ? (
-                                <p className="mt-1 text-xs font-medium text-slate-500">
-                                  All {item.quantity} returned ·{" "}
-                                  {formatTime(item.returned_at)}
-                                </p>
-                              ) : (
-                                <p className="mt-1 text-xs font-medium text-slate-500">
-                                  {returned} returned ·{" "}
-                                  <span
-                                    className={
-                                      item.status === "late"
-                                        ? "font-semibold text-red-600"
-                                        : "font-semibold text-slate-700"
-                                    }
-                                  >
-                                    {outstanding}{" "}
-                                    {item.status === "late"
-                                      ? "late"
-                                      : "outstanding"}
-                                  </span>
-                                </p>
                               )}
                             </div>
 
-                            <span
-                              className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold ${itemPresentation.classes}`}
-                            >
-                              {itemPresentation.label}
-                            </span>
+                            <p className="mt-1 text-xs text-slate-500">
+                              {returned
+                                ? `Returned ${formatTime(item.returned_at)}`
+                                : item.status === "late"
+                                  ? "Not returned by 23:00"
+                                  : "Currently out"}
+                            </p>
                           </div>
 
-                          {/* RETURN PROGRESS */}
-                          <div className="mt-3">
-                            <div className="h-2 overflow-hidden rounded-full bg-slate-200">
-                              <div
-                                className="h-full rounded-full bg-emerald-500 transition-all"
-                                style={{
-                                  width: `${
-                                    item.quantity
-                                      ? (returned /
-                                          item.quantity) *
-                                        100
-                                      : 0
-                                  }%`,
-                                }}
-                              />
-                            </div>
-
-                            <div className="mt-2 flex items-center justify-between gap-2">
-                              <span className="text-xs font-semibold text-slate-500">
-                                {returned} / {item.quantity} returned
-                              </span>
-
-                              {partial && (
-                                <span className="rounded-full bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-700">
-                                  Partial Return
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* MOBILE-FRIENDLY ACTIONS */}
-                          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:justify-end">
-                            {!fullyReturned ? (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  openPartialReturn(item)
-                                }
-                                className={`min-h-11 w-full rounded-xl px-4 text-sm font-semibold transition sm:w-auto ${
-                                  item.status === "late"
-                                    ? "bg-red-600 text-white hover:bg-red-700"
-                                    : "bg-slate-950 text-white hover:bg-slate-800"
-                                }`}
-                              >
-                                Return Items
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                disabled={updating}
-                                onClick={() =>
-                                  void reopenMultiItem(item)
-                                }
-                                className="min-h-10 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50 sm:w-auto"
-                              >
-                                {updating
-                                  ? "Updating..."
-                                  : "Mark Outstanding"}
-                              </button>
-                            )}
-                          </div>
+                          <span
+                            className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold ${itemPresentation.classes}`}
+                          >
+                            {itemPresentation.label}
+                          </span>
                         </div>
                       );
                     })}
                   </div>
 
-                  {/* LOAN ACTIONS */}
-                  <div className="border-t border-slate-200 bg-slate-100/80 px-4 py-3 sm:px-5">
+                  {/* ACTIONS */}
+                  <div className="border-t border-slate-100 bg-slate-50/70 px-4 py-3 sm:px-5">
                     {addingToLoanId === loan.id ? (
                       <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_90px_auto_auto]">
                         <input
@@ -1185,35 +1097,29 @@ export default function EquipmentLoans({
                           autoFocus
                           value={extraItemName}
                           onChange={(event) =>
-                            setExtraItemName(
-                              event.target.value
-                            )
+                            setExtraItemName(event.target.value)
                           }
                           placeholder="Tool or equipment..."
-                          className="h-11 min-w-0 rounded-xl border border-slate-300 bg-white px-3 text-base font-medium text-slate-950 placeholder:text-slate-400"
+                          className="h-11 min-w-0 rounded-xl border border-slate-300 bg-white px-3 text-base"
                         />
 
                         <input
                           type="number"
                           inputMode="numeric"
                           min="1"
+                          step="1"
                           value={extraItemQuantity}
                           onChange={(event) =>
                             setExtraItemQuantity(
-                              Math.max(
-                                1,
-                                Number(event.target.value) || 1
-                              )
+                              Math.max(1, Number(event.target.value) || 1)
                             )
                           }
-                          className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-base font-semibold text-slate-950"
+                          className="h-11 rounded-xl border border-slate-300 bg-white px-3 text-base font-medium text-slate-950 placeholder:text-slate-400"
                         />
 
                         <button
                           type="button"
-                          onClick={() =>
-                            void submitExtraItem(loan.id)
-                          }
+                          onClick={() => void submitExtraItem(loan.id)}
                           className="min-h-11 rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white"
                         >
                           Add
@@ -1226,13 +1132,14 @@ export default function EquipmentLoans({
                             setExtraItemName("");
                             setExtraItemQuantity(1);
                           }}
-                          className="min-h-11 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700"
+                          className="min-h-11 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-600"
                         >
                           Cancel
                         </button>
                       </div>
                     ) : (
                       <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                        {/* New tools can only be added to today's loans */}
                         {isToday && (
                           <button
                             type="button"
@@ -1241,26 +1148,23 @@ export default function EquipmentLoans({
                               setExtraItemName("");
                               setExtraItemQuantity(1);
                             }}
-                            className="min-h-11 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                            className="min-h-10 rounded-xl border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                           >
                             + Add Tool
                           </button>
                         )}
 
+                        {/* Returns remain available for old overdue loans */}
                         {outstandingItems.length > 0 && (
                           <button
                             type="button"
-                            disabled={
-                              returningLoanId === loan.id
-                            }
-                            onClick={() =>
-                              void returnAll(loan.id)
-                            }
-                            className="min-h-11 rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                            disabled={returningLoanId === loan.id}
+                            onClick={() => void returnAll(loan.id)}
+                            className="min-h-10 rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
                           >
                             {returningLoanId === loan.id
                               ? "Returning..."
-                              : "Return All Outstanding"}
+                              : "Return All"}
                           </button>
                         )}
                       </div>
@@ -1279,224 +1183,7 @@ export default function EquipmentLoans({
         ))}
       </datalist>
 
-      {/* =====================================================
-          PARTIAL RETURN SHEET
-          Mobile = bottom sheet
-          Desktop = centred dialog
-      ====================================================== */}
-      {partialReturn && (
-        <div
-          className="fixed inset-0 z-[140] flex items-end justify-center bg-slate-950/55 backdrop-blur-sm sm:items-center sm:p-4"
-          onMouseDown={closePartialReturn}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label={`Return ${partialReturn.itemName}`}
-            onMouseDown={(event) =>
-              event.stopPropagation()
-            }
-            className="w-full max-w-md overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl"
-          >
-            <div className="border-b border-slate-200 px-4 py-4 sm:px-5">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
-                    Return Equipment
-                  </p>
-
-                  <h3 className="mt-1 text-lg font-bold text-slate-950">
-                    {partialReturn.itemName}
-                  </h3>
-
-                  <p className="mt-1 text-sm text-slate-500">
-                    Record only the quantity being returned now.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  disabled={savingPartialReturn}
-                  onClick={closePartialReturn}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xl text-slate-500 hover:bg-slate-100"
-                >
-                  ×
-                </button>
-              </div>
-            </div>
-
-            <div className="p-4 sm:p-5">
-              {/* CURRENT POSITION */}
-              <div className="grid grid-cols-3 gap-2">
-                <div className="rounded-xl bg-slate-100 p-3 text-center">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-                    Loaned
-                  </p>
-
-                  <p className="mt-1 text-2xl font-bold text-slate-950">
-                    {partialReturn.quantity}
-                  </p>
-                </div>
-
-                <div className="rounded-xl bg-emerald-50 p-3 text-center">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-600">
-                    Returned
-                  </p>
-
-                  <p className="mt-1 text-2xl font-bold text-emerald-700">
-                    {partialReturn.quantityReturned}
-                  </p>
-                </div>
-
-                <div className="rounded-xl bg-blue-50 p-3 text-center">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-600">
-                    Still Out
-                  </p>
-
-                  <p className="mt-1 text-2xl font-bold text-blue-700">
-                    {partialOutstanding}
-                  </p>
-                </div>
-              </div>
-
-              {/* RETURN NOW */}
-              <div className="mt-6 text-center">
-                <p className="text-sm font-semibold text-slate-700">
-                  How many are being returned now?
-                </p>
-
-                <div className="mx-auto mt-4 grid max-w-[250px] grid-cols-[56px_minmax(0,1fr)_56px] items-center gap-3">
-                  <button
-                    type="button"
-                    disabled={returnNow <= 1}
-                    onClick={() =>
-                      setReturnNow((current) =>
-                        Math.max(1, current - 1)
-                      )
-                    }
-                    className="flex h-14 items-center justify-center rounded-2xl border border-slate-300 bg-white text-2xl font-medium text-slate-700 active:bg-slate-100 disabled:opacity-30"
-                  >
-                    −
-                  </button>
-
-                  <div className="flex h-16 items-center justify-center rounded-2xl bg-slate-950 text-3xl font-bold text-white">
-                    {returnNow}
-                  </div>
-
-                  <button
-                    type="button"
-                    disabled={
-                      returnNow >= partialOutstanding
-                    }
-                    onClick={() =>
-                      setReturnNow((current) =>
-                        Math.min(
-                          partialOutstanding,
-                          current + 1
-                        )
-                      )
-                    }
-                    className="flex h-14 items-center justify-center rounded-2xl border border-slate-300 bg-white text-2xl font-medium text-slate-700 active:bg-slate-100 disabled:opacity-30"
-                  >
-                    +
-                  </button>
-                </div>
-
-                {partialOutstanding > 1 && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setReturnNow(partialOutstanding)
-                    }
-                    className="mt-3 min-h-10 rounded-xl bg-slate-100 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-200"
-                  >
-                    Return all {partialOutstanding} remaining
-                  </button>
-                )}
-              </div>
-
-              {/* PREVIEW */}
-              <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  After this return
-                </p>
-
-                <div className="mt-3 flex items-end justify-between gap-4">
-                  <div>
-                    <p className="text-xl font-bold text-emerald-700">
-                      {partialAfterReturn} /{" "}
-                      {partialReturn.quantity} returned
-                    </p>
-
-                    <p className="mt-1 text-sm text-slate-500">
-                      {Math.max(
-                        partialReturn.quantity -
-                          partialAfterReturn,
-                        0
-                      )}{" "}
-                      remaining
-                    </p>
-                  </div>
-
-                  {partialAfterReturn ===
-                    partialReturn.quantity && (
-                    <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">
-                      Fully Returned
-                    </span>
-                  )}
-                </div>
-
-                <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200">
-                  <div
-                    className="h-full rounded-full bg-emerald-500"
-                    style={{
-                      width: `${
-                        (partialAfterReturn /
-                          partialReturn.quantity) *
-                        100
-                      }%`,
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* MOBILE STICKY-LIKE ACTION AREA */}
-            <div className="border-t border-slate-200 bg-white p-4 sm:p-5">
-              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                <button
-                  type="button"
-                  disabled={savingPartialReturn}
-                  onClick={closePartialReturn}
-                  className="min-h-12 rounded-xl border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-700"
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="button"
-                  disabled={
-                    savingPartialReturn ||
-                    returnNow < 1
-                  }
-                  onClick={() =>
-                    void confirmPartialReturn()
-                  }
-                  className="min-h-12 rounded-xl bg-emerald-600 px-5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
-                >
-                  {savingPartialReturn
-                    ? "Saving..."
-                    : `Confirm ${returnNow} Returned`}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* =====================================================
-          NEW LOAN
-      ====================================================== */}
+      {/* NEW LOAN */}
       {showNewLoan && (
         <div
           className="fixed inset-0 z-[120] flex items-end justify-center bg-slate-950/50 backdrop-blur-sm sm:items-center sm:p-4"
@@ -1506,9 +1193,7 @@ export default function EquipmentLoans({
             role="dialog"
             aria-modal="true"
             aria-label="Issue equipment loan"
-            onMouseDown={(event) =>
-              event.stopPropagation()
-            }
+            onMouseDown={(event) => event.stopPropagation()}
             className="flex max-h-[94dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:max-h-[90dvh] sm:rounded-3xl"
           >
             <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-4 sm:px-5">
@@ -1522,7 +1207,7 @@ export default function EquipmentLoans({
                 </h2>
 
                 <p className="mt-1 text-sm text-slate-500">
-                  Due back today by 23:00.
+                  {portalSession.label} booking · Due back today by 23:00.
                 </p>
               </div>
 
@@ -1549,42 +1234,32 @@ export default function EquipmentLoans({
                     </p>
 
                     <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
-                      {data.recentBorrowers
-                        .slice(0, 6)
-                        .map((borrower) => (
-                          <button
-                            key={`${borrower.departmentId}-${borrower.borrowerAimsId}`}
-                            type="button"
-                            onClick={() =>
-                              applyRecentBorrower(borrower)
-                            }
-                            className="min-w-[180px] shrink-0 rounded-xl border border-slate-200 bg-slate-50 p-3 text-left hover:bg-white"
-                          >
-                            <p className="truncate text-sm font-semibold text-slate-950">
-                              {borrower.borrowerName}
-                            </p>
+                      {data.recentBorrowers.slice(0, 6).map((borrower) => (
+                        <button
+                          key={`${borrower.departmentId}-${borrower.borrowerAimsId}`}
+                          type="button"
+                          onClick={() => applyRecentBorrower(borrower)}
+                          className="min-w-[180px] shrink-0 rounded-xl border border-slate-200 bg-slate-50 p-3 text-left hover:border-slate-300 hover:bg-white"
+                        >
+                          <p className="truncate text-sm font-semibold text-slate-900">
+                            {borrower.borrowerName}
+                          </p>
 
-                            <p className="mt-1 truncate text-xs font-medium text-slate-600">
-                              {borrower.departmentName}
-                            </p>
+                          <p className="mt-1 truncate text-xs text-slate-500">
+                            {borrower.departmentName}
+                          </p>
 
-                            <p className="mt-1 text-xs font-medium text-slate-500">
-                              AIMS {borrower.borrowerAimsId}
-                            </p>
-                          </button>
-                        ))}
+                          <p className="mt-1 text-xs font-medium text-slate-400">
+                            AIMS {borrower.borrowerAimsId}
+                          </p>
+                        </button>
+                      ))}
                     </div>
                   </div>
                 )}
 
                 {/* BORROWER */}
-                <div
-                  className={
-                    data?.recentBorrowers.length
-                      ? "mt-6"
-                      : ""
-                  }
-                >
+                <div className={data?.recentBorrowers.length ? "mt-6" : ""}>
                   <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
                     Borrower
                   </p>
@@ -1598,26 +1273,20 @@ export default function EquipmentLoans({
                       <select
                         value={departmentId}
                         onChange={(event) =>
-                          setDepartmentId(
-                            event.target.value
-                          )
+                          setDepartmentId(event.target.value)
                         }
-                        className="mt-2 h-12 w-full rounded-xl border border-slate-300 bg-white px-3 text-base font-medium text-slate-950 outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+                        className="mt-2 h-12 w-full rounded-xl border border-slate-300 bg-white px-3 text-base text-slate-900"
                       >
-                        <option value="">
-                          Select department...
-                        </option>
+                        <option value="">Select department...</option>
 
-                        {data?.departments.map(
-                          (department) => (
-                            <option
-                              key={department.id}
-                              value={department.id}
-                            >
-                              {department.name}
-                            </option>
-                          )
-                        )}
+                        {data?.departments.map((department) => (
+                          <option
+                            key={department.id}
+                            value={department.id}
+                          >
+                            {department.name}
+                          </option>
+                        ))}
                       </select>
                     </label>
 
@@ -1631,12 +1300,10 @@ export default function EquipmentLoans({
                           type="text"
                           value={borrowerName}
                           onChange={(event) =>
-                            setBorrowerName(
-                              event.target.value
-                            )
+                            setBorrowerName(event.target.value)
                           }
                           placeholder="Borrower's full name"
-                          className="mt-2 h-12 w-full rounded-xl border border-slate-300 bg-white px-3 text-base font-medium text-slate-950 placeholder:font-normal placeholder:text-slate-400 outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+                          className="mt-2 h-12 w-full rounded-xl border border-slate-300 bg-white px-3 text-base font-medium text-slate-950 placeholder:text-slate-400"
                         />
                       </label>
 
@@ -1650,12 +1317,10 @@ export default function EquipmentLoans({
                           inputMode="numeric"
                           value={borrowerAimsId}
                           onChange={(event) =>
-                            setBorrowerAimsId(
-                              event.target.value
-                            )
+                            setBorrowerAimsId(event.target.value)
                           }
                           placeholder="AIMS ID"
-                          className="mt-2 h-12 w-full rounded-xl border border-slate-300 bg-white px-3 text-base font-medium text-slate-950 placeholder:font-normal placeholder:text-slate-400 outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+                          className="mt-2 h-12 w-full rounded-xl border border-slate-300 bg-white px-3 text-base font-medium text-slate-950 placeholder:text-slate-400"
                         />
                       </label>
                     </div>
@@ -1675,10 +1340,9 @@ export default function EquipmentLoans({
                       </p>
                     </div>
 
-                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
                       {draftItems.reduce(
-                        (sum, item) =>
-                          sum + item.quantity,
+                        (sum, item) => sum + item.quantity,
                         0
                       )}{" "}
                       items
@@ -1691,47 +1355,43 @@ export default function EquipmentLoans({
                       list="equipment-tool-suggestions"
                       value={itemName}
                       onKeyDown={handleToolKeyDown}
-                      onChange={(event) =>
-                        setItemName(event.target.value)
-                      }
+                      onChange={(event) => setItemName(event.target.value)}
                       placeholder="e.g. Cordless Drill"
-                      className="h-12 min-w-0 rounded-xl border border-slate-300 bg-white px-3 text-base font-medium text-slate-950 placeholder:text-slate-400 outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+                      className="h-12 min-w-0 rounded-xl border border-slate-300 bg-white px-3 text-base"
                     />
 
                     <input
                       type="number"
                       inputMode="numeric"
                       min="1"
+                      step="1"
                       value={itemQuantity}
                       onChange={(event) =>
                         setItemQuantity(
-                          Math.max(
-                            1,
-                            Number(event.target.value) || 1
-                          )
+                          Math.max(1, Number(event.target.value) || 1)
                         )
                       }
                       aria-label="Quantity"
-                      className="h-12 rounded-xl border border-slate-300 bg-white px-3 text-center text-base font-bold text-slate-950"
+                      className="h-12 rounded-xl border border-slate-300 bg-white px-3 text-center text-base"
                     />
 
                     <button
                       type="button"
                       onClick={addDraftItem}
-                      className="col-span-2 min-h-11 rounded-xl bg-slate-200 px-4 text-sm font-semibold text-slate-900 hover:bg-slate-300 sm:col-span-1"
+                      className="col-span-2 min-h-11 rounded-xl bg-slate-100 px-4 text-sm font-semibold text-slate-800 hover:bg-slate-200 sm:col-span-1"
                     >
                       + Add
                     </button>
                   </div>
 
                   {!!draftItems.length && (
-                    <div className="mt-4 divide-y divide-slate-200 overflow-hidden rounded-xl border border-slate-200">
+                    <div className="mt-4 divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200">
                       {draftItems.map((item) => (
                         <div
                           key={item.localId}
-                          className="flex items-center gap-3 bg-white px-3 py-3"
+                          className="flex items-center gap-3 px-3 py-3"
                         >
-                          <p className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-950">
+                          <p className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">
                             {item.item_name}
                           </p>
 
@@ -1741,8 +1401,7 @@ export default function EquipmentLoans({
                               onClick={() =>
                                 setDraftItems((current) =>
                                   current.map((candidate) =>
-                                    candidate.localId ===
-                                    item.localId
+                                    candidate.localId === item.localId
                                       ? {
                                           ...candidate,
                                           quantity: Math.max(
@@ -1754,12 +1413,12 @@ export default function EquipmentLoans({
                                   )
                                 )
                               }
-                              className="flex h-9 w-9 items-center justify-center text-slate-700"
+                              className="flex h-9 w-9 items-center justify-center text-slate-600"
                             >
                               −
                             </button>
 
-                            <span className="min-w-8 text-center text-sm font-bold text-slate-950">
+                            <span className="min-w-8 text-center text-sm font-bold">
                               {item.quantity}
                             </span>
 
@@ -1768,19 +1427,17 @@ export default function EquipmentLoans({
                               onClick={() =>
                                 setDraftItems((current) =>
                                   current.map((candidate) =>
-                                    candidate.localId ===
-                                    item.localId
+                                    candidate.localId === item.localId
                                       ? {
                                           ...candidate,
                                           quantity:
-                                            candidate.quantity +
-                                            1,
+                                            candidate.quantity + 1,
                                         }
                                       : candidate
                                   )
                                 )
                               }
-                              className="flex h-9 w-9 items-center justify-center text-slate-700"
+                              className="flex h-9 w-9 items-center justify-center text-slate-600"
                             >
                               +
                             </button>
@@ -1793,8 +1450,7 @@ export default function EquipmentLoans({
                               setDraftItems((current) =>
                                 current.filter(
                                   (candidate) =>
-                                    candidate.localId !==
-                                    item.localId
+                                    candidate.localId !== item.localId
                                 )
                               )
                             }
@@ -1815,7 +1471,7 @@ export default function EquipmentLoans({
                 )}
               </div>
 
-              {/* STICKY MOBILE ACTIONS */}
+              {/* STICKY ACTIONS */}
               <div className="sticky bottom-0 border-t border-slate-200 bg-white/95 p-4 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur sm:p-5">
                 <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                   <button
@@ -1832,9 +1488,7 @@ export default function EquipmentLoans({
                     disabled={issuing}
                     className="min-h-12 rounded-xl bg-slate-950 px-5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
                   >
-                    {issuing
-                      ? "Issuing..."
-                      : "Issue Equipment"}
+                    {issuing ? "Issuing..." : "Issue Equipment"}
                   </button>
                 </div>
               </div>

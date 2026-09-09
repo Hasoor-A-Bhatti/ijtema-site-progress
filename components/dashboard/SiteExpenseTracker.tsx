@@ -243,7 +243,7 @@ export default function SiteExpenseTracker() {
             </h3>
 
             <p className="mt-1 text-sm text-slate-300">
-              Paid amounts recorded by Site Accounts from 07/09/2026 onwards.
+              Current budget position based on the latest submitted Site Accounts report.
             </p>
           </div>
 
@@ -317,7 +317,7 @@ export default function SiteExpenseTracker() {
 
             <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-red-600">
-                Total Paid
+                Latest Total Paid
               </p>
 
               <p className="mt-2 text-2xl font-bold text-red-800">
@@ -329,14 +329,11 @@ export default function SiteExpenseTracker() {
               </p>
 
               <p className="mt-1 text-xs text-red-700">
-                Across{" "}
-                {data?.reportsCount ??
-                  0}{" "}
-                saved report
-                {(data?.reportsCount ??
-                  0) === 1
-                  ? ""
-                  : "s"}
+                {data?.latestReportDate
+                  ? `From ${formatDate(
+                      data.latestReportDate
+                    )}`
+                  : "No submitted report yet"}
               </p>
             </div>
 
@@ -397,15 +394,11 @@ export default function SiteExpenseTracker() {
             <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-slate-50 px-4 py-3">
               <div>
                 <p className="text-sm font-semibold text-slate-900">
-                  Recent Expense
-                  Reports
+                  Submitted Expense Reports
                 </p>
 
                 <p className="mt-0.5 text-xs text-slate-500">
-                  Latest Site
-                  Accounts paid
-                  totals included
-                  in the tracker.
+                  The newest submitted report is used for the current budget position.
                 </p>
               </div>
 
@@ -425,35 +418,36 @@ export default function SiteExpenseTracker() {
             ) : latestReports.length ===
               0 ? (
               <div className="p-6 text-center text-sm text-slate-500">
-                No Site Accounts
-                expense reports
-                have been saved
-                from 07/09/2026
-                yet.
+                No submitted Site Accounts expense reports are available from 07/09/2026 onwards.
               </div>
             ) : (
               <div className="divide-y divide-slate-100">
                 {latestReports.map(
                   (
-                    report
+                    report,
+                    index
                   ) => (
                     <div
-                      key={
-                        report.reportDate
-                      }
+                      key={`${report.reportDate}-${report.submittedAt ?? index}`}
                       className="flex items-center justify-between gap-4 px-4 py-3.5"
                     >
                       <div>
-                        <p className="text-sm font-semibold text-slate-900">
-                          {formatDate(
-                            report.reportDate
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-semibold text-slate-900">
+                            {formatDate(
+                              report.reportDate
+                            )}
+                          </p>
+
+                          {index === 0 && (
+                            <span className="rounded-full bg-slate-950 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                              Current
+                            </span>
                           )}
-                        </p>
+                        </div>
 
                         <p className="mt-0.5 text-xs text-slate-500">
-                          {report.submittedAt
-                            ? "Submitted report"
-                            : "Saved draft"}
+                          Submitted report
                         </p>
                       </div>
 
@@ -473,17 +467,17 @@ export default function SiteExpenseTracker() {
         <div className="mt-5 rounded-xl bg-slate-50 px-4 py-3 text-xs leading-5 text-slate-500">
           Remaining Budget =
           £15,000 minus the
-          sum of all
-          departmental
-          amounts entered in
-          the{" "}
+          total{" "}
           <span className="font-semibold text-slate-700">
             Paid
           </span>{" "}
-          column of Site
-          Accounts reports
-          dated 07/09/2026 or
-          later.
+          amount recorded in
+          the most recent
+          submitted Site
+          Accounts report.
+          Previous reporting
+          days are not added
+          together.
         </div>
       </div>
     </section>
