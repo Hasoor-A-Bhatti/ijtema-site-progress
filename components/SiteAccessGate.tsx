@@ -11,240 +11,404 @@ interface SiteAccessGateProps {
   children: ReactNode;
 }
 
+interface SiteAccessResponse {
+  success?: boolean;
+  authorised?: boolean;
+  error?: string;
+}
+
 export default function SiteAccessGate({
   children,
 }: SiteAccessGateProps) {
-  const [checking, setChecking] =
+  const [
+    checking,
+    setChecking,
+  ] =
     useState(true);
 
-  const [allowed, setAllowed] =
+  const [
+    authorised,
+    setAuthorised,
+  ] =
     useState(false);
 
-  const [password, setPassword] =
+  const [
+    password,
+    setPassword,
+  ] =
     useState("");
 
-  const [error, setError] =
-    useState("");
-
-  const [loading, setLoading] =
+  const [
+    submitting,
+    setSubmitting,
+  ] =
     useState(false);
+
+  const [
+    error,
+    setError,
+  ] =
+    useState<string | null>(
+      null
+    );
 
   /*
-   * Check whether the existing
-   * editor session is already valid.
+   * Check the dedicated website-access cookie when
+   * the gate first mounts.
+   *
+   * This intentionally checks /api/site-access only.
+   * It does NOT touch the editor authentication system,
+   * so entering the website does not enable editing.
    */
   useEffect(() => {
-    let cancelled = false;
+    let cancelled =
+      false;
 
-    async function checkAccess() {
-      try {
-        const response = await fetch(
-          "/api/editor/status",
-          {
-            cache: "no-store",
+    const timeout =
+      window.setTimeout(
+        () => {
+          async function checkSiteAccess() {
+            try {
+              const response =
+                await fetch(
+                  "/api/site-access",
+                  {
+                    method:
+                      "GET",
+                    cache:
+                      "no-store",
+                    credentials:
+                      "same-origin",
+                  }
+                );
+
+              const body =
+                (await response
+                  .json()
+                  .catch(
+                    () =>
+                      null
+                  )) as
+                  | SiteAccessResponse
+                  | null;
+
+              if (
+                cancelled
+              ) {
+                return;
+              }
+
+              if (
+                response.ok &&
+                body?.authorised
+              ) {
+                setAuthorised(
+                  true
+                );
+
+                setError(
+                  null
+                );
+              } else {
+                setAuthorised(
+                  false
+                );
+
+                if (
+                  !response.ok &&
+                  body?.error
+                ) {
+                  setError(
+                    body.error
+                  );
+                }
+              }
+            } catch {
+              if (
+                cancelled
+              ) {
+                return;
+              }
+
+              setAuthorised(
+                false
+              );
+
+              setError(
+                "The site access check could not be completed."
+              );
+            } finally {
+              if (
+                !cancelled
+              ) {
+                setChecking(
+                  false
+                );
+              }
+            }
           }
-        );
 
-        const data =
-          await response.json();
-
-        if (!cancelled) {
-          setAllowed(
-            Boolean(
-              data.authenticated ??
-                data.unlocked ??
-                data.editingEnabled
-            )
-          );
-        }
-      } catch {
-        if (!cancelled) {
-          setAllowed(false);
-        }
-      } finally {
-        if (!cancelled) {
-          setChecking(false);
-        }
-      }
-    }
-
-    void checkAccess();
+          void checkSiteAccess();
+        },
+        0
+      );
 
     return () => {
-      cancelled = true;
+      cancelled =
+        true;
+
+      window.clearTimeout(
+        timeout
+      );
     };
   }, []);
 
-  async function handleSubmit(
-    event: FormEvent
+  async function submitPassword(
+    event:
+      FormEvent<HTMLFormElement>
   ) {
     event.preventDefault();
 
-    if (!password.trim()) {
+    if (
+      submitting
+    ) {
+      return;
+    }
+
+    const cleanPassword =
+      password.trim();
+
+    if (
+      !cleanPassword
+    ) {
       setError(
-        "Please enter the entry password."
+        "Enter the site password."
       );
       return;
     }
 
-    setLoading(true);
-    setError("");
+    setSubmitting(
+      true
+    );
+
+    setError(
+      null
+    );
 
     try {
-      const response = await fetch(
-        "/api/editor/unlock",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-          body: JSON.stringify({
-            password,
-          }),
-        }
-      );
+      const response =
+        await fetch(
+          "/api/site-access",
+          {
+            method:
+              "POST",
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+            credentials:
+              "same-origin",
+            body:
+              JSON.stringify(
+                {
+                  password:
+                    cleanPassword,
+                }
+              ),
+          }
+        );
 
-      const data = await response
-        .json()
-        .catch(() => ({}));
+      const body =
+        (await response
+          .json()
+          .catch(
+            () =>
+              null
+          )) as
+          | SiteAccessResponse
+          | null;
 
-      if (!response.ok) {
+      if (
+        !response.ok ||
+        !body?.authorised
+      ) {
         throw new Error(
-          data.error ??
-            "Incorrect password."
+          body?.error ??
+            "The password was not accepted."
         );
       }
 
-      setAllowed(true);
-      setPassword("");
-    } catch (error) {
+      /*
+       * WEBSITE ACCESS ONLY.
+       *
+       * Explicitly clear any OLD editor session that may
+       * still exist in this browser from a previous visit.
+       *
+       * This is important because the old editor cookie
+       * can otherwise survive while the new site-access
+       * login succeeds, making the website appear to have
+       * enabled editing automatically.
+       *
+       * We call the EXISTING editor lock endpoint. We never
+       * call /api/editor/unlock here.
+       */
+      const lockResponse =
+        await fetch(
+          "/api/editor/lock",
+          {
+            method:
+              "POST",
+            credentials:
+              "same-origin",
+          }
+        );
+
+      if (
+        !lockResponse.ok
+      ) {
+        throw new Error(
+          "Website access succeeded, but the previous editing session could not be cleared."
+        );
+      }
+
+      /*
+       * Only reveal the website after the editor session
+       * has definitely been cleared. When
+       * EditorAccessProvider mounts, /api/editor/status
+       * will therefore report View Only.
+       */
+      setAuthorised(
+        true
+      );
+
+      setPassword(
+        ""
+      );
+    } catch (
+      loginError
+    ) {
       setError(
-        error instanceof Error
-          ? error.message
-          : "Incorrect password."
+        loginError instanceof
+          Error
+          ? loginError.message
+          : "The password was not accepted."
       );
     } finally {
-      setLoading(false);
+      setSubmitting(
+        false
+      );
     }
   }
 
-  /*
-   * Prevent the map flashing
-   * briefly while session status
-   * is being checked.
-   */
-  if (checking) {
+  if (
+    checking
+  ) {
     return (
-      <main className="flex min-h-dvh items-center justify-center bg-slate-950">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-      </main>
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4">
+        <div className="text-center">
+          <div className="mx-auto h-9 w-9 animate-spin rounded-full border-2 border-slate-600 border-t-white" />
+
+          <p className="mt-4 text-sm font-medium text-slate-300">
+            Checking site access…
+          </p>
+        </div>
+      </div>
     );
   }
 
-  /*
-   * Existing valid editor session:
-   * show website normally.
-   */
-  if (allowed) {
-    return <>{children}</>;
+  if (
+    authorised
+  ) {
+    return (
+      <>
+        {
+          children
+        }
+      </>
+    );
   }
 
-  /*
-   * ENTRY SCREEN
-   */
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-slate-950 px-4">
-      <div className="w-full max-w-sm">
-        <div className="rounded-3xl bg-white p-7 shadow-2xl">
-          <div className="mb-7 text-center">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 text-white">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                className="h-7 w-7"
-                aria-hidden="true"
-              >
-                <path
-                  d="M7 10V8a5 5 0 0 1 10 0v2"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                />
+    <main className="flex min-h-screen items-center justify-center bg-slate-950 px-4 py-8">
+      <div className="w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-white shadow-2xl">
+        <div className="bg-slate-950 px-6 py-7 text-white sm:px-7">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+            National Ijtema 2026
+          </p>
 
-                <rect
-                  x="5"
-                  y="10"
-                  width="14"
-                  height="10"
-                  rx="2"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                />
-              </svg>
-            </div>
+          <h1 className="mt-2 text-2xl font-semibold">
+            Site Progress Access
+          </h1>
 
-            <h1 className="text-xl font-semibold text-slate-900">
-              National Ijtema 2026
-            </h1>
-
-            <p className="mt-1 text-sm text-slate-500">
-              Site Progress Portal
-            </p>
-          </div>
-
-          <form
-            onSubmit={handleSubmit}
-            className="space-y-4"
-          >
-            <div>
-              <label
-                htmlFor="entry-password"
-                className="mb-2 block text-sm font-medium text-slate-700"
-              >
-                Entry Password
-              </label>
-
-              <input
-                id="entry-password"
-                type="password"
-                autoFocus
-                value={password}
-                onChange={(event) => {
-                  setPassword(
-                    event.target.value
-                  );
-
-                  if (error) {
-                    setError("");
-                  }
-                }}
-                placeholder="Enter password"
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-base text-slate-900 outline-none transition focus:border-slate-500 focus:ring-4 focus:ring-slate-100"
-              />
-            </div>
-
-            {error && (
-              <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
-                {error}
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full rounded-xl bg-slate-900 px-4 py-3 font-semibold text-white transition hover:bg-slate-800 disabled:opacity-50"
-            >
-              {loading
-                ? "Checking..."
-                : "Enter Site"}
-            </button>
-          </form>
+          <p className="mt-2 text-sm leading-6 text-slate-300">
+            Enter the site access password to continue.
+          </p>
         </div>
 
-        <p className="mt-4 text-center text-xs text-slate-500">
-          Authorised access only
-        </p>
+        <form
+          onSubmit={
+            submitPassword
+          }
+          className="p-6 sm:p-7"
+        >
+          <label className="block">
+            <span className="text-sm font-semibold text-slate-800">
+              Password
+            </span>
+
+            <input
+              type="password"
+              autoFocus
+              autoComplete="current-password"
+              value={
+                password
+              }
+              onChange={(
+                event
+              ) => {
+                setPassword(
+                  event
+                    .target
+                    .value
+                );
+
+                if (
+                  error
+                ) {
+                  setError(
+                    null
+                  );
+                }
+              }}
+              className="mt-2 h-12 w-full rounded-xl border border-slate-300 bg-white px-3 text-base font-medium text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+              placeholder="Enter password"
+            />
+          </label>
+
+          {error && (
+            <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-3 text-sm font-medium text-red-700">
+              {
+                error
+              }
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={
+              submitting
+            }
+            className="mt-5 min-h-12 w-full rounded-xl bg-slate-950 px-5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-wait disabled:opacity-60"
+          >
+            {submitting
+              ? "Checking…"
+              : "Enter Site"}
+          </button>
+
+          <p className="mt-4 text-center text-xs leading-5 text-slate-400">
+            Website access and editing access are separate.
+          </p>
+        </form>
       </div>
     </main>
   );

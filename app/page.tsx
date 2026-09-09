@@ -6,8 +6,8 @@ import SiteMap from "@/components/map/SiteMap";
 
 export default function Home() {
   return (
-    <EditorAccessProvider>
-      <SiteAccessGate>
+    <SiteAccessGate>
+      <EditorAccessProvider>
         <main className="min-h-dvh bg-slate-100">
           <header className="flex h-[72px] items-center justify-between border-b bg-white px-4 md:px-6">
             <div className="min-w-0">
@@ -29,7 +29,7 @@ export default function Home() {
 
           <SiteMap />
         </main>
-      </SiteAccessGate>
-    </EditorAccessProvider>
+      </EditorAccessProvider>
+    </SiteAccessGate>
   );
 }
