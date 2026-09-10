@@ -12,8 +12,8 @@ export interface InitialGeneratorDefinition {
 }
 
 export const initialGenerators: InitialGeneratorDefinition[] = [
-  { id: "g1", name: "G1", x: 1046, y: 1178, kva: 100, description: null, syncGroup: "Sync 1" },
-  { id: "g2", name: "G2", x: 1068, y: 1189, kva: 100, description: null, syncGroup: "Sync 1" },
+  { id: "g1", name: "G1", x: 893, y: 1321, kva: 100, description: null, syncGroup: "Sync 1" },
+  { id: "g2", name: "G2", x: 928, y: 1340, kva: 100, description: null, syncGroup: "Sync 1" },
   { id: "g3", name: "G3", x: 773, y: 1180, kva: 100, description: null, syncGroup: null },
   { id: "g4", name: "G4", x: 656, y: 1401, kva: 100, description: null, syncGroup: null },
   { id: "g5", name: "G5", x: 1419, y: 1133, kva: 100, description: null, syncGroup: null },
@@ -29,6 +29,6 @@ export const initialGenerators: InitialGeneratorDefinition[] = [
   { id: "g15", name: "G15", x: 142, y: 1181, kva: 60, description: null, syncGroup: null },
   { id: "g16", name: "G16", x: 966, y: 525, kva: 60, description: null, syncGroup: null },
   { id: "g17", name: "G17", x: 1169, y: 1717, kva: 40, description: "VIP", syncGroup: null },
-  { id: "g18", name: "G18", x: 1044, y: 1435, kva: 100, description: null, syncGroup: "Sync 2" },
-  { id: "g19", name: "G19", x: 1066, y: 1447, kva: 100, description: null, syncGroup: "Sync 2" },
+  { id: "g18", name: "G18", x: 937, y: 1496, kva: 100, description: null, syncGroup: "Sync 2" },
+  { id: "g19", name: "G19", x: 976, y: 1516, kva: 100, description: null, syncGroup: "Sync 2" },
 ];
