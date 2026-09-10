@@ -24,7 +24,7 @@ export const STATUS_CONFIG: Record<SiteStatus, StatusConfigItem> = {
   },
   carpeting_completed: {
     label: "Carpeting Completed",
-    colour: "#2DD4BF",
+    colour: "#f126a0ff",
   },
   electrical_installation_completed: {
     label: "Electrical Installation Completed",
