@@ -10,7 +10,9 @@ import {
 } from "react-zoom-pan-pinch";
 
 import AreaDetailsCard from "@/components/area/AreaDetailsCard";
+import GeneratorDetailsCard from "@/components/generator/GeneratorDetailsCard";
 import ProgressSummary from "@/components/dashboard/ProgressSummary";
+import GeneratorLayer from "@/components/map/GeneratorLayer";
 import InfrastructureLineLayer from "@/components/map/InfrastructureLineLayer";
 import MapToolbar from "@/components/map/MapToolbar";
 import SiteAreaLayer from "@/components/map/SiteAreaLayer";
@@ -21,6 +23,7 @@ import type { MapView } from "@/components/map/MapToolbar";
 import { infrastructureLines } from "@/data/infrastructureLines";
 import { siteAreas } from "@/data/siteAreas";
 
+import useGenerators from "@/hooks/useGenerators";
 import useUrgentTaskCounts from "@/hooks/useUrgentTaskCounts";
 
 import { supabase } from "@/lib/supabase";
@@ -60,6 +63,227 @@ const TRANSFORM_CONTENT_STYLE = {
   justifyContent: "center",
 };
 
+function grayscaleChannel(
+  red: number,
+  green: number,
+  blue: number
+) {
+  return Math.round(
+    red * 0.2126 +
+      green * 0.7152 +
+      blue * 0.0722
+  );
+}
+
+function toMonochromeColor(
+  input: string
+) {
+  const value = input.trim();
+  const important = /\s*!important\s*$/i.test(value);
+  const cleanValue = value.replace(
+    /\s*!important\s*$/i,
+    ""
+  );
+
+  if (
+    cleanValue === "none" ||
+    cleanValue === "transparent" ||
+    cleanValue === "currentColor" ||
+    cleanValue.startsWith("url(") ||
+    cleanValue.startsWith("var(")
+  ) {
+    return input;
+  }
+
+  const hexMatch = cleanValue.match(
+    /^#([0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i
+  );
+
+  if (hexMatch) {
+    let hex = hexMatch[1];
+
+    if (hex.length === 3 || hex.length === 4) {
+      hex = hex
+        .split("")
+        .map((character) =>
+          character + character
+        )
+        .join("");
+    }
+
+    const red = parseInt(
+      hex.slice(0, 2),
+      16
+    );
+    const green = parseInt(
+      hex.slice(2, 4),
+      16
+    );
+    const blue = parseInt(
+      hex.slice(4, 6),
+      16
+    );
+    const alpha =
+      hex.length === 8
+        ? hex.slice(6, 8)
+        : "";
+
+    const gray = grayscaleChannel(
+      red,
+      green,
+      blue
+    );
+    const grayHex = gray
+      .toString(16)
+      .padStart(2, "0");
+
+    return `#${grayHex}${grayHex}${grayHex}${alpha}${
+      important ? " !important" : ""
+    }`;
+  }
+
+  const rgbMatch = cleanValue.match(
+    /^rgba?\(\s*([\d.]+)\s*[, ]\s*([\d.]+)\s*[, ]\s*([\d.]+)(?:\s*[,/]\s*([\d.]+%?))?\s*\)$/i
+  );
+
+  if (rgbMatch) {
+    const red = Math.max(
+      0,
+      Math.min(255, Number(rgbMatch[1]))
+    );
+    const green = Math.max(
+      0,
+      Math.min(255, Number(rgbMatch[2]))
+    );
+    const blue = Math.max(
+      0,
+      Math.min(255, Number(rgbMatch[3]))
+    );
+    const gray = grayscaleChannel(
+      red,
+      green,
+      blue
+    );
+    const alpha = rgbMatch[4];
+
+    return alpha
+      ? `rgba(${gray}, ${gray}, ${gray}, ${alpha})${
+          important ? " !important" : ""
+        }`
+      : `rgb(${gray}, ${gray}, ${gray})${
+          important ? " !important" : ""
+        }`;
+  }
+
+  return input;
+}
+
+function convertCssColorsToMonochrome(
+  cssText: string
+) {
+  return cssText.replace(
+    /(fill|stroke|color|stop-color|flood-color|lighting-color)\s*:\s*([^;}{]+)/gi,
+    (_match, property: string, value: string) =>
+      `${property}: ${toMonochromeColor(
+        value
+      )}`
+  );
+}
+
+function makeSvgMonochrome(
+  svgText: string
+) {
+  const parser = new DOMParser();
+  const document = parser.parseFromString(
+    svgText,
+    "image/svg+xml"
+  );
+
+  if (document.querySelector("parsererror")) {
+    throw new Error(
+      "The site map SVG could not be parsed."
+    );
+  }
+
+  const svg = document.documentElement;
+  const colorAttributes = [
+    "fill",
+    "stroke",
+    "color",
+    "stop-color",
+    "flood-color",
+    "lighting-color",
+  ];
+
+  document.querySelectorAll("*").forEach(
+    (element) => {
+      colorAttributes.forEach(
+        (attribute) => {
+          const value =
+            element.getAttribute(attribute);
+
+          if (value) {
+            element.setAttribute(
+              attribute,
+              toMonochromeColor(value)
+            );
+          }
+        }
+      );
+
+      const inlineStyle =
+        element.getAttribute("style");
+
+      if (inlineStyle) {
+        element.setAttribute(
+          "style",
+          convertCssColorsToMonochrome(
+            inlineStyle
+          )
+        );
+      }
+    }
+  );
+
+  document
+    .querySelectorAll("style")
+    .forEach((styleElement) => {
+      if (styleElement.textContent) {
+        styleElement.textContent =
+          convertCssColorsToMonochrome(
+            styleElement.textContent
+          );
+      }
+    });
+
+  /*
+   * Remove executable content from the static
+   * SVG before inserting it into the page.
+   */
+  document
+    .querySelectorAll("script")
+    .forEach((script) => script.remove());
+
+  svg.setAttribute("width", "100%");
+  svg.setAttribute("height", "100%");
+  svg.setAttribute(
+    "preserveAspectRatio",
+    "xMidYMid meet"
+  );
+
+  const existingStyle =
+    svg.getAttribute("style") ?? "";
+
+  svg.setAttribute(
+    "style",
+    `${existingStyle};width:100%;height:100%;display:block;`
+  );
+
+  return new XMLSerializer().serializeToString(
+    svg
+  );
+}
+
 export default function SiteMap() {
   const [traceMode, setTraceMode] =
     useState(false);
@@ -87,8 +311,23 @@ export default function SiteMap() {
     Record<string, SiteStatus>
   >(INITIAL_STATUSES);
 
+  const [
+    monochromeMapSvg,
+    setMonochromeMapSvg,
+  ] = useState<string | null>(null);
+
+  const [
+    selectedGeneratorId,
+    setSelectedGeneratorId,
+  ] = useState<string | null>(null);
+
   const urgentTaskCounts =
     useUrgentTaskCounts();
+
+  const {
+    generators,
+    refresh: refreshGenerators,
+  } = useGenerators();
 
   /*
    * CURRENTLY SELECTED FEATURE
@@ -101,6 +340,19 @@ export default function SiteMap() {
           selectedFeatureId
       ) ?? null,
     [selectedFeatureId]
+  );
+
+  const selectedGenerator = useMemo(
+    () =>
+      generators.find(
+        (generator) =>
+          generator.id ===
+          selectedGeneratorId
+      ) ?? null,
+    [
+      generators,
+      selectedGeneratorId,
+    ]
   );
 
   /*
@@ -155,6 +407,60 @@ export default function SiteMap() {
 
       return [];
     }, [mapView]);
+
+  /*
+   * LOAD THE ORIGINAL VECTOR MAP AND CONVERT
+   * ITS COLOURS DIRECTLY INSIDE THE SVG.
+   *
+   * This deliberately avoids CSS filters such
+   * as grayscale / contrast / brightness. Those
+   * filters can cause the browser to rasterise the
+   * SVG before react-zoom-pan-pinch scales it, which
+   * makes small labels look soft or blurred.
+   *
+   * Converting the actual SVG colour values keeps
+   * text and linework as vector content at every zoom.
+   */
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMonochromeMap() {
+      try {
+        const response = await fetch(
+          "/maps/site-map.svg",
+          { cache: "force-cache" }
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            "The site map could not be loaded."
+          );
+        }
+
+        const svgText =
+          await response.text();
+        const monochromeSvg =
+          makeSvgMonochrome(svgText);
+
+        if (!cancelled) {
+          setMonochromeMapSvg(
+            monochromeSvg
+          );
+        }
+      } catch (error) {
+        console.error(
+          "Failed to create monochrome site map:",
+          error
+        );
+      }
+    }
+
+    void loadMonochromeMap();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   /*
    * LOAD SAVED STATUSES
@@ -323,6 +629,7 @@ export default function SiteMap() {
   ) {
     setMapView(nextView);
     setSelectedFeatureId(null);
+    setSelectedGeneratorId(null);
   }
 
   /*
@@ -333,6 +640,7 @@ export default function SiteMap() {
   ) {
     if (!traceMode) {
       setSelectedFeatureId(null);
+      setSelectedGeneratorId(null);
       return;
     }
 
@@ -369,6 +677,7 @@ export default function SiteMap() {
 
       if (next) {
         setSelectedFeatureId(null);
+        setSelectedGeneratorId(null);
       }
 
       return next;
@@ -451,7 +760,7 @@ export default function SiteMap() {
         maxScale={8}
         centerOnInit
         wheel={{
-          step: 0.04,
+          step: 0.1,
         }}
         pinch={{
           disabled: traceMode,
@@ -498,14 +807,14 @@ export default function SiteMap() {
               onCopy={
                 copyPoints
               }
-              onZoomIn={() =>
-                zoomIn()
+              onZoomIn={
+                zoomIn
               }
-              onZoomOut={() =>
-                zoomOut()
+              onZoomOut={
+                zoomOut
               }
-              onReset={() =>
-                resetTransform()
+              onReset={
+                resetTransform
               }
             />
 
@@ -536,17 +845,37 @@ export default function SiteMap() {
                     aspectRatio: `${MAP_WIDTH} / ${MAP_HEIGHT}`,
                   }}
                 >
-                  {/* SITE PLAN */}
-                  <img
-                    src="/maps/site-map.svg"
-                    alt="National Ijtema 2026 site plan"
-                    draggable={
-                      false
-                    }
-                    loading="eager"
-                    fetchPriority="high"
-                    className="pointer-events-none absolute inset-0 h-full w-full select-none"
-                  />
+                  {/*
+                   * SITE PLAN — HIGH-QUALITY MONOCHROME
+                   *
+                   * The converted map remains inline SVG/vector
+                   * content, so labels and linework stay sharp
+                   * while zooming. No CSS grayscale filter is used.
+                   */}
+                  {monochromeMapSvg ? (
+                    <div
+                      role="img"
+                      aria-label="National Ijtema 2026 site plan"
+                      className="pointer-events-none absolute inset-0 h-full w-full select-none overflow-hidden"
+                      dangerouslySetInnerHTML={{
+                        __html:
+                          monochromeMapSvg,
+                      }}
+                    />
+                  ) : (
+                    /*
+                     * Unfiltered vector fallback while the
+                     * monochrome SVG is being prepared.
+                     */
+                    <img
+                      src="/maps/site-map.svg"
+                      alt="National Ijtema 2026 site plan"
+                      draggable={false}
+                      loading="eager"
+                      fetchPriority="high"
+                      className="pointer-events-none absolute inset-0 h-full w-full select-none"
+                    />
+                  )}
 
                   {/* INTERACTIVE MAP */}
                   <svg
@@ -577,9 +906,16 @@ export default function SiteMap() {
                       traceMode={
                         traceMode
                       }
-                      onSelectArea={
-                        setSelectedFeatureId
-                      }
+                      onSelectArea={(
+                        featureId
+                      ) => {
+                        setSelectedGeneratorId(
+                          null
+                        );
+                        setSelectedFeatureId(
+                          featureId
+                        );
+                      }}
                     />
 
                     {/* MARQUEES / SITE AREAS */}
@@ -599,9 +935,39 @@ export default function SiteMap() {
                       traceMode={
                         traceMode
                       }
-                      onSelectArea={
-                        setSelectedFeatureId
+                      onSelectArea={(
+                        featureId
+                      ) => {
+                        setSelectedGeneratorId(
+                          null
+                        );
+                        setSelectedFeatureId(
+                          featureId
+                        );
+                      }}
+                    />
+
+                    {/* GENERATORS */}
+                    <GeneratorLayer
+                      generators={
+                        generators
                       }
+                      selectedGeneratorId={
+                        selectedGeneratorId
+                      }
+                      traceMode={
+                        traceMode
+                      }
+                      onSelectGenerator={(
+                        generatorId
+                      ) => {
+                        setSelectedFeatureId(
+                          null
+                        );
+                        setSelectedGeneratorId(
+                          generatorId
+                        );
+                      }}
                     />
 
                     {/* TRACE PREVIEW */}
@@ -650,6 +1016,26 @@ export default function SiteMap() {
           }
           onClose={() =>
             setSelectedFeatureId(
+              null
+            )
+          }
+        />
+      )}
+
+      {/* GENERATOR DETAILS */}
+      {selectedGenerator && (
+        <GeneratorDetailsCard
+          key={
+            selectedGenerator.id
+          }
+          generator={
+            selectedGenerator
+          }
+          onChanged={
+            refreshGenerators
+          }
+          onClose={() =>
+            setSelectedGeneratorId(
               null
             )
           }
