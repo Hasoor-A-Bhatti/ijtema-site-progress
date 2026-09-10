@@ -18,6 +18,7 @@ interface GeneratorRow {
   default_kva: number;
   description: string | null;
   sync_group: string | null;
+  is_down: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -27,7 +28,7 @@ export async function GET() {
     supabaseServer
       .from("generators")
       .select(
-        "id, name, x, y, kva, default_kva, description, sync_group, created_at, updated_at"
+        "id, name, x, y, kva, default_kva, description, sync_group, is_down, created_at, updated_at"
       )
       .order("name", { ascending: true }),
     supabaseServer
@@ -95,6 +96,7 @@ export async function GET() {
         kva: Number(generator.kva),
         x: Number(generator.x),
         y: Number(generator.y),
+        is_down: Boolean(generator.is_down),
         fuel_logs: logs,
         rating_history: ratingsByGenerator.get(generator.id) ?? [],
         total_fuel_litres: logs.reduce(

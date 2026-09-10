@@ -23,6 +23,7 @@ export interface SiteGenerator {
   default_kva: number;
   description: string | null;
   sync_group: string | null;
+  is_down: boolean;
   created_at: string;
   updated_at: string;
   fuel_logs: GeneratorFuelLog[];

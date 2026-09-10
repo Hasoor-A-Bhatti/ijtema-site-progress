@@ -215,6 +215,7 @@ export default function GeneratorDetailsCard({
   const [litres, setLitres] = useState("");
   const [savingKva, setSavingKva] = useState(false);
   const [addingFuel, setAddingFuel] = useState(false);
+  const [updatingDownStatus, setUpdatingDownStatus] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -419,6 +420,66 @@ export default function GeneratorDetailsCard({
     }
   }
 
+  async function toggleGeneratorDown() {
+    const nextIsDown = !generator.is_down;
+
+    if (
+      nextIsDown &&
+      !window.confirm(
+        `Mark ${generator.name} as DOWN? A warning will immediately appear on the site map.`
+      )
+    ) {
+      return;
+    }
+
+    setUpdatingDownStatus(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const response = await fetch(
+        `/api/generators/${encodeURIComponent(generator.id)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isDown: nextIsDown }),
+        }
+      );
+
+      const body = (await response.json().catch(() => null)) as
+        | { success?: boolean; error?: string }
+        | null;
+
+      if (response.status === 401 || response.status === 403) {
+        throw new Error(
+          "Editing access has expired. Enable editing again."
+        );
+      }
+
+      if (!response.ok || !body?.success) {
+        throw new Error(
+          body?.error ?? "Generator operational status could not be saved."
+        );
+      }
+
+      setSuccess(
+        nextIsDown
+          ? `${generator.name} marked as down. The map warning is now active.`
+          : `${generator.name} marked as operational. The map warning has been cleared.`
+      );
+
+      await onChanged();
+    } catch (statusError) {
+      setError(
+        statusError instanceof Error
+          ? statusError.message
+          : "Generator operational status could not be saved."
+      );
+    } finally {
+      setUpdatingDownStatus(false);
+    }
+  }
+
   async function removeFuel(log: GeneratorFuelLog) {
     if (
       !window.confirm(
@@ -525,6 +586,23 @@ export default function GeneratorDetailsCard({
               </p>
             </div>
           </div>
+
+          {generator.is_down && (
+            <div className="mt-3 flex items-start gap-3 rounded-2xl border border-red-300 bg-red-50 p-4">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-600 text-base font-black text-white">
+                !
+              </div>
+              <div>
+                <p className="text-sm font-bold text-red-900">
+                  Generator Down
+                </p>
+                <p className="mt-0.5 text-xs leading-5 text-red-700">
+                  This generator has been flagged as not operational. A warning
+                  indicator is active on the site map.
+                </p>
+              </div>
+            </div>
+          )}
 
           {todayRating && (
             <div className="mt-3 rounded-2xl border border-blue-200 bg-blue-50 p-4">
@@ -806,6 +884,38 @@ export default function GeneratorDetailsCard({
                   );
                 })}
               </div>
+            )}
+          </section>
+
+          <section className="mt-5 border-t border-slate-200 pt-5">
+            {canEdit ? (
+              <button
+                type="button"
+                disabled={updatingDownStatus}
+                onClick={() => void toggleGeneratorDown()}
+                className={`min-h-12 w-full rounded-xl px-4 text-sm font-bold transition disabled:opacity-50 ${
+                  generator.is_down
+                    ? "border border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+                    : "border border-red-300 bg-red-50 text-red-700 hover:bg-red-100"
+                }`}
+              >
+                {updatingDownStatus
+                  ? "Updating…"
+                  : generator.is_down
+                    ? "Mark Generator Operational"
+                    : "Generator Down"}
+              </button>
+            ) : generator.is_down ? (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-center text-sm font-bold text-red-700">
+                Generator Down
+              </div>
+            ) : null}
+
+            {canEdit && (
+              <p className="mt-2 text-center text-[11px] leading-4 text-slate-500">
+                Use this only when the generator is not operational. The map
+                warning stays active until it is marked operational again.
+              </p>
             )}
           </section>
         </div>

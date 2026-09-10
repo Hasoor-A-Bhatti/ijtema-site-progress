@@ -28,10 +28,60 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   const { generatorId } = await context.params;
   const body = (await request.json().catch(() => null)) as
-    | { kva?: unknown }
+    | { kva?: unknown; isDown?: unknown }
     | null;
 
-  const kva = Number(body?.kva);
+  if (!body || typeof body !== "object") {
+    return NextResponse.json(
+      { error: "Invalid request body." },
+      { status: 400 }
+    );
+  }
+
+  /*
+   * Generator operational state is intentionally separate from the kVA
+   * rating/history. Marking a generator down does not alter its configured
+   * power rating or its daily rating calculations.
+   */
+  if ("isDown" in body) {
+    if (typeof body.isDown !== "boolean") {
+      return NextResponse.json(
+        { error: "Generator status must be true or false." },
+        { status: 400 }
+      );
+    }
+
+    const { data, error } = await supabaseServer
+      .from("generators")
+      .update({ is_down: body.isDown })
+      .eq("id", generatorId)
+      .select(
+        "id, name, x, y, kva, default_kva, description, sync_group, is_down, created_at, updated_at"
+      )
+      .maybeSingle();
+
+    if (error) {
+      console.error("Failed to update generator operational status:", error);
+      return NextResponse.json(
+        { error: "Generator operational status could not be saved." },
+        { status: 500 }
+      );
+    }
+
+    if (!data) {
+      return NextResponse.json(
+        { error: "Generator not found." },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      generator: data,
+    });
+  }
+
+  const kva = Number(body.kva);
 
   if (!Number.isFinite(kva) || kva <= 0 || kva > 5000) {
     return NextResponse.json(
