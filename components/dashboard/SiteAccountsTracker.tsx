@@ -723,39 +723,24 @@ export default function SiteAccountsTracker({
                           {department.name}
                         </p>
 
-                        <div className="mt-3 grid grid-cols-2 gap-3">
-                          {(
-                            [
-                              ["submitted", "Submitted"],
-                              [
-                                "pending_approval",
-                                "Pending Approval",
-                              ],
-                              [
-                                "approved_remaining",
-                                "Approved / Remaining",
-                              ],
-                              ["paid", "Paid"],
-                            ] as const
-                          ).map(([field, label]) => (
-                            <label key={field} className="block">
-                              <span className="mb-1.5 block text-[11px] font-semibold text-slate-500">
-                                {label}
-                              </span>
+                        <div className="mt-3">
+                          <label className="block">
+                            <span className="mb-1.5 block text-[11px] font-semibold text-slate-500">
+                              Amount Paid
+                            </span>
 
-                              <MoneyInput
-                                value={entry?.[field] ?? "0"}
-                                ariaLabel={`${department.name} ${label}`}
-                                onChange={(value) =>
-                                  updateExpense(
-                                    department.id,
-                                    field,
-                                    value
-                                  )
-                                }
-                              />
-                            </label>
-                          ))}
+                            <MoneyInput
+                              value={entry?.paid ?? "0"}
+                              ariaLabel={`${department.name} Amount Paid`}
+                              onChange={(value) =>
+                                updateExpense(
+                                  department.id,
+                                  "paid",
+                                  value
+                                )
+                              }
+                            />
+                          </label>
                         </div>
                       </div>
                     );
@@ -764,27 +749,15 @@ export default function SiteAccountsTracker({
               </div>
 
               <div className="mt-4 hidden overflow-x-auto rounded-2xl border border-slate-200 lg:block">
-                <table className="w-full min-w-[760px] border-collapse">
+                <table className="w-full min-w-[520px] border-collapse">
                   <thead className="bg-slate-100">
                     <tr>
-                      <th className="sticky left-0 z-10 w-[220px] bg-slate-100 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      <th className="sticky left-0 z-10 w-[320px] bg-slate-100 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                         Department
                       </th>
 
-                      <th className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        Submitted
-                      </th>
-
-                      <th className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        Pending Approval
-                      </th>
-
-                      <th className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        Approved / Remaining
-                      </th>
-
-                      <th className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        Paid
+                      <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Amount Paid
                       </th>
                     </tr>
                   </thead>
@@ -801,37 +774,19 @@ export default function SiteAccountsTracker({
                               {department.name}
                             </td>
 
-                            {(
-                              [
-                                ["submitted", "Submitted"],
-                                [
-                                  "pending_approval",
-                                  "Pending Approval",
-                                ],
-                                [
-                                  "approved_remaining",
-                                  "Approved / Remaining",
-                                ],
-                                ["paid", "Paid"],
-                              ] as const
-                            ).map(([field, label]) => (
-                              <td
-                                key={field}
-                                className="min-w-[140px] px-2 py-2"
-                              >
-                                <MoneyInput
-                                  value={entry?.[field] ?? "0"}
-                                  ariaLabel={`${department.name} ${label}`}
-                                  onChange={(value) =>
-                                    updateExpense(
-                                      department.id,
-                                      field,
-                                      value
-                                    )
-                                  }
-                                />
-                              </td>
-                            ))}
+                            <td className="min-w-[180px] px-4 py-2">
+                              <MoneyInput
+                                value={entry?.paid ?? "0"}
+                                ariaLabel={`${department.name} Amount Paid`}
+                                onChange={(value) =>
+                                  updateExpense(
+                                    department.id,
+                                    "paid",
+                                    value
+                                  )
+                                }
+                              />
+                            </td>
                           </tr>
                         );
                       }
