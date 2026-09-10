@@ -97,7 +97,7 @@ export const siteAreas: SiteArea[] = [
   {
     id: "pad-1",
     name: "Pad 1",
-    type: "other",
+    type: "metal_tracking",
     points: "1274,1263 1333,1153 1469,1227 1410,1335",
     status: "not_started",
   },
@@ -361,7 +361,7 @@ export const siteAreas: SiteArea[] = [
   {
     id: "pad-2",
     name: "Pad 2",
-    type: "other",
+    type: "metal_tracking",
     points: "954,1865 1006,1769 1140,1840 1089,1937",
     status: "not_started",
   },

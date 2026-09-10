@@ -359,21 +359,43 @@ export default function SiteMap() {
    * FILTER POLYGON AREAS
    *
    * ALL:
-   * Show site areas.
+   * Show every polygon site area.
    *
    * MARQUEES:
-   * Show site areas only.
+   * Show normal site areas, but hide polygon
+   * areas that represent tracking.
    *
-   * TRACKING / FENCE:
-   * Hide site-area overlays completely.
+   * TRACKING:
+   * Show polygon tracking areas such as Pad 1
+   * and Pad 2 alongside the existing track lines.
+   *
+   * FENCE / GENERATORS:
+   * Hide polygon site-area overlays.
    */
   const visibleSiteAreas =
     useMemo(() => {
-      if (
-        mapView === "all" ||
-        mapView === "marquees"
-      ) {
+      if (mapView === "all") {
         return siteAreas;
+      }
+
+      if (mapView === "marquees") {
+        return siteAreas.filter(
+          (area) =>
+            area.type !==
+              "metal_tracking" &&
+            area.type !==
+              "rubber_tracking"
+        );
+      }
+
+      if (mapView === "tracking") {
+        return siteAreas.filter(
+          (area) =>
+            area.type ===
+              "metal_tracking" ||
+            area.type ===
+              "rubber_tracking"
+        );
       }
 
       return [];
