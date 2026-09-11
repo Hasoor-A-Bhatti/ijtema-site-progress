@@ -535,19 +535,19 @@ export default function GeneratorDetailsCard({
   return (
     <aside className="absolute inset-x-3 bottom-3 z-40 flex max-h-[72%] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl sm:left-auto sm:right-4 sm:top-4 sm:bottom-auto sm:w-[390px] sm:max-h-[calc(100%-2rem)]">
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="shrink-0 border-b border-red-900 bg-red-700 px-5 py-4 text-white">
+        <div className="shrink-0 border-b border-slate-950 bg-[#0F2747] px-5 py-4 text-white">
           <div className="flex items-start justify-between gap-4">
             <div>
               <div className="flex items-center gap-2">
                 <span className="h-3.5 w-3.5 rounded-[3px] border border-white/50 bg-red-500" />
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-red-100">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-100">
                   Site Generator
                 </p>
               </div>
 
               <h2 className="mt-1 text-2xl font-bold">{generator.name}</h2>
 
-              <p className="mt-1 text-sm text-red-100">
+              <p className="mt-1 text-sm text-blue-100">
                 {generator.kva} kVA
                 {generator.sync_group ? ` · ${generator.sync_group}` : ""}
                 {generator.description ? ` · ${generator.description}` : ""}
@@ -558,7 +558,7 @@ export default function GeneratorDetailsCard({
               type="button"
               onClick={onClose}
               aria-label="Close generator details"
-              className="flex h-10 w-10 items-center justify-center rounded-xl text-2xl text-red-100 transition hover:bg-white/10 hover:text-white"
+              className="flex h-10 w-10 items-center justify-center rounded-xl text-2xl text-blue-100 transition hover:bg-white/10 hover:text-white"
             >
               ×
             </button>

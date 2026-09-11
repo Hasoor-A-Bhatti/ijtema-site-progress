@@ -1,4 +1,8 @@
-import { STATUS_CONFIG } from "@/config/statuses";
+"use client";
+
+import {
+  STATUS_CONFIG,
+} from "@/config/statuses";
 
 import type {
   SiteArea,
@@ -7,11 +11,21 @@ import type {
 
 interface SiteAreaLayerProps {
   areas: SiteArea[];
-  statuses: Record<string, SiteStatus>;
-  urgentTaskCounts: Record<string, number>;
-  selectedAreaId: string | null;
+  statuses: Record<
+    string,
+    SiteStatus
+  >;
+  urgentTaskCounts: Record<
+    string,
+    number
+  >;
+  selectedAreaId:
+    | string
+    | null;
   traceMode: boolean;
-  onSelectArea: (areaId: string) => void;
+  onSelectArea: (
+    areaId: string
+  ) => void;
 }
 
 interface Point {
@@ -19,38 +33,69 @@ interface Point {
   y: number;
 }
 
-function parsePoints(points: string): Point[] {
+function parsePoints(
+  points: string
+): Point[] {
   return points
     .trim()
     .split(/\s+/)
     .map((point) => {
-      const [x, y] = point.split(",").map(Number);
+      const [x, y] =
+        point
+          .split(",")
+          .map(Number);
 
-      return { x, y };
+      return {
+        x,
+        y,
+      };
     })
     .filter(
       (point) =>
-        Number.isFinite(point.x) &&
-        Number.isFinite(point.y)
+        Number.isFinite(
+          point.x
+        ) &&
+        Number.isFinite(
+          point.y
+        )
     );
 }
 
-function getAreaCentre(points: Point[]): Point | null {
-  if (points.length === 0) {
+function getCentroid(
+  points: Point[]
+): Point | null {
+  if (
+    points.length === 0
+  ) {
     return null;
   }
 
-  const total = points.reduce(
-    (sum, point) => ({
-      x: sum.x + point.x,
-      y: sum.y + point.y,
-    }),
-    { x: 0, y: 0 }
-  );
+  const total =
+    points.reduce(
+      (
+        result,
+        point
+      ) => ({
+        x:
+          result.x +
+          point.x,
+        y:
+          result.y +
+          point.y,
+      }),
+      {
+        x: 0,
+        y: 0,
+      }
+    );
 
   return {
-    x: total.x / points.length,
-    y: total.y / points.length,
+    x:
+      total.x /
+      points.length,
+    y:
+      total.y /
+      points.length,
   };
 }
 
@@ -64,106 +109,244 @@ export default function SiteAreaLayer({
 }: SiteAreaLayerProps) {
   return (
     <>
-      {areas.map((area) => {
-        const status = statuses[area.id] ?? area.status;
-        const config = STATUS_CONFIG[status];
+      {areas.map(
+        (area) => {
+          const status =
+            statuses[
+              area.id
+            ] ??
+            area.status;
 
-        const selected = selectedAreaId === area.id;
-        const urgentCount = urgentTaskCounts[area.id] ?? 0;
+          const selected =
+            selectedAreaId ===
+            area.id;
 
-        const areaCentre = getAreaCentre(
-          parsePoints(area.points)
-        );
+          const urgentCount =
+            urgentTaskCounts[
+              area.id
+            ] ?? 0;
 
-        /*
-         * Marquee dark-grey outlines are 20% thinner.
-         *
-         * Existing standard:
-         * 2 normal / 3 selected
-         *
-         * Marquee:
-         * 1.6 normal / 2.4 selected
-         */
-        const strokeWidth =
-          area.type === "marquee"
-            ? selected
-              ? 2.4
-              : 1.6
-            : selected
-              ? 3
-              : 2;
+          /*
+           * Only marquees pulse.
+           *
+           * Tracking polygons such as
+           * Pad 1 / Pad 2 are not
+           * affected by this marquee
+           * warning animation.
+           */
+          const hasUrgentIssue =
+            area.type ===
+              "marquee" &&
+            urgentCount > 0;
 
-        return (
-          <g key={area.id}>
-            <polygon
-              points={area.points}
-              fill={config.colour}
-              fillOpacity={selected ? 0.62 : 0.5}
-              stroke="#475569"
-              strokeWidth={strokeWidth}
-              strokeLinejoin="round"
-              vectorEffect="non-scaling-stroke"
-              pointerEvents={traceMode ? "none" : "all"}
-              className={
-                traceMode
-                  ? undefined
-                  : "cursor-pointer"
-              }
-              onClick={(event) => {
-                if (traceMode) return;
+          const colour =
+            STATUS_CONFIG[
+              status
+            ]?.colour ??
+            STATUS_CONFIG
+              .not_started
+              .colour;
 
-                event.stopPropagation();
-                onSelectArea(area.id);
-              }}
-            />
+          const points =
+            parsePoints(
+              area.points
+            );
 
-            {/* URGENT ISSUE BADGE */}
-            {urgentCount > 0 &&
-              areaCentre &&
-              !traceMode && (
-                <g
-                  className="cursor-pointer"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onSelectArea(area.id);
-                  }}
-                >
-                  <circle
-                    cx={areaCentre.x}
-                    cy={areaCentre.y}
-                    r="36"
-                    fill="transparent"
-                    pointerEvents="all"
-                  />
+          const centroid =
+            getCentroid(
+              points
+            );
 
-                  <circle
-                    cx={areaCentre.x}
-                    cy={areaCentre.y}
-                    r="27"
-                    fill="#DC2626"
-                    stroke="white"
-                    strokeWidth="4"
-                    vectorEffect="non-scaling-stroke"
-                    pointerEvents="none"
-                  />
+          return (
+            <g
+              key={area.id}
+            >
+              {/* RED URGENCY GLOW */}
+              {hasUrgentIssue &&
+                !traceMode && (
+                  <>
+                    <polygon
+                      points={
+                        area.points
+                      }
+                      fill="none"
+                      stroke="#EF4444"
+                      strokeWidth="7"
+                      strokeLinejoin="round"
+                      pointerEvents="none"
+                      vectorEffect="non-scaling-stroke"
+                      opacity="0.9"
+                    >
+                      <animate
+                        attributeName="opacity"
+                        values="1;0.15;1"
+                        dur="1.35s"
+                        repeatCount="indefinite"
+                      />
 
-                  <text
-                    x={areaCentre.x}
-                    y={areaCentre.y}
-                    textAnchor="middle"
-                    dominantBaseline="central"
-                    fill="white"
-                    fontSize="28"
-                    fontWeight="700"
-                    pointerEvents="none"
+                      <animate
+                        attributeName="stroke-width"
+                        values="7;13;7"
+                        dur="1.35s"
+                        repeatCount="indefinite"
+                      />
+                    </polygon>
+
+                    <polygon
+                      points={
+                        area.points
+                      }
+                      fill="none"
+                      stroke="#DC2626"
+                      strokeWidth="3"
+                      strokeLinejoin="round"
+                      pointerEvents="none"
+                      vectorEffect="non-scaling-stroke"
+                      opacity="0.75"
+                    >
+                      <animate
+                        attributeName="opacity"
+                        values="0.8;0.1;0.8"
+                        dur="1.35s"
+                        repeatCount="indefinite"
+                      />
+                    </polygon>
+                  </>
+                )}
+
+              {/* MAIN AREA POLYGON */}
+              <polygon
+                points={
+                  area.points
+                }
+                fill={
+                  colour
+                }
+                fillOpacity={
+                  selected
+                    ? 0.62
+                    : 0.46
+                }
+                stroke={
+                  selected
+                    ? "#0F172A"
+                    : colour
+                }
+                strokeWidth={
+                  selected
+                    ? 4
+                    : 2
+                }
+                strokeLinejoin="round"
+                vectorEffect="non-scaling-stroke"
+                pointerEvents={
+                  traceMode
+                    ? "none"
+                    : "all"
+                }
+                className={
+                  traceMode
+                    ? ""
+                    : "cursor-pointer"
+                }
+                onClick={(
+                  event
+                ) => {
+                  if (
+                    traceMode
+                  ) {
+                    return;
+                  }
+
+                  event.stopPropagation();
+
+                  onSelectArea(
+                    area.id
+                  );
+                }}
+              />
+
+              {/* EXISTING URGENT COUNT INDICATOR */}
+              {urgentCount >
+                0 &&
+                centroid &&
+                !traceMode && (
+                  <g
+                    className="cursor-pointer"
+                    onClick={(
+                      event
+                    ) => {
+                      event.stopPropagation();
+
+                      onSelectArea(
+                        area.id
+                      );
+                    }}
                   >
-                    {urgentCount}
-                  </text>
-                </g>
-              )}
-          </g>
-        );
-      })}
+                    <circle
+                      cx={
+                        centroid.x
+                      }
+                      cy={
+                        centroid.y
+                      }
+                      r="25"
+                      fill="transparent"
+                      pointerEvents="all"
+                    />
+
+                    <circle
+                      cx={
+                        centroid.x
+                      }
+                      cy={
+                        centroid.y
+                      }
+                      r="17"
+                      fill="#DC2626"
+                      stroke="#FFFFFF"
+                      strokeWidth="3"
+                      vectorEffect="non-scaling-stroke"
+                      pointerEvents="none"
+                    />
+
+                    <text
+                      x={
+                        centroid.x
+                      }
+                      y={
+                        centroid.y
+                      }
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                      fill="#FFFFFF"
+                      fontSize="18"
+                      fontWeight="800"
+                      pointerEvents="none"
+                    >
+                      {
+                        urgentCount
+                      }
+                    </text>
+                  </g>
+                )}
+
+              <title>
+                {area.name}
+                {urgentCount >
+                0
+                  ? ` · ${urgentCount} urgent issue${
+                      urgentCount ===
+                      1
+                        ? ""
+                        : "s"
+                    }`
+                  : ""}
+              </title>
+            </g>
+          );
+        }
+      )}
     </>
   );
 }

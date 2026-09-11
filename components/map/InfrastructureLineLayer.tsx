@@ -73,10 +73,8 @@ function isInfrastructureType(
 ): type is InfrastructureType {
   return (
     type === "fence" ||
-    type ===
-      "rubber_tracking" ||
-    type ===
-      "metal_tracking"
+    type === "rubber_tracking" ||
+    type === "metal_tracking"
   );
 }
 
@@ -87,10 +85,9 @@ function parsePoints(
     .trim()
     .split(/\s+/)
     .map((point) => {
-      const [x, y] =
-        point
-          .split(",")
-          .map(Number);
+      const [x, y] = point
+        .split(",")
+        .map(Number);
 
       return {
         x,
@@ -99,89 +96,59 @@ function parsePoints(
     })
     .filter(
       (point) =>
-        Number.isFinite(
-          point.x
-        ) &&
-        Number.isFinite(
-          point.y
-        )
+        Number.isFinite(point.x) &&
+        Number.isFinite(point.y)
     );
 }
 
 function getLineMidpoint(
   points: Point[]
 ): Point | null {
-  if (
-    points.length === 0
-  ) {
+  if (points.length === 0) {
     return null;
   }
 
-  if (
-    points.length === 1
-  ) {
+  if (points.length === 1) {
     return points[0];
   }
 
-  const segments =
-    points
-      .slice(1)
-      .map(
-        (
-          point,
-          index
-        ) => {
-          const start =
-            points[index];
+  const segments = points
+    .slice(1)
+    .map((point, index) => {
+      const start = points[index];
 
-          return {
-            start,
-            end: point,
-            length:
-              Math.hypot(
-                point.x -
-                  start.x,
-                point.y -
-                  start.y
-              ),
-          };
-        }
-      );
+      return {
+        start,
+        end: point,
+        length: Math.hypot(
+          point.x - start.x,
+          point.y - start.y
+        ),
+      };
+    });
 
-  const totalLength =
-    segments.reduce(
-      (
-        total,
-        segment
-      ) =>
-        total +
-        segment.length,
-      0
-    );
+  const totalLength = segments.reduce(
+    (total, segment) =>
+      total + segment.length,
+    0
+  );
 
-  if (
-    totalLength === 0
-  ) {
+  if (totalLength === 0) {
     return points[0];
   }
 
-  const halfway =
-    totalLength / 2;
+  const halfway = totalLength / 2;
 
   let travelled = 0;
 
-  for (
-    const segment
-    of segments
-  ) {
+  for (const segment of segments) {
     if (
       travelled +
         segment.length >=
       halfway
     ) {
       const remaining =
-        halfway -
-        travelled;
+        halfway - travelled;
 
       const ratio =
         segment.length > 0
@@ -204,14 +171,10 @@ function getLineMidpoint(
       };
     }
 
-    travelled +=
-      segment.length;
+    travelled += segment.length;
   }
 
-  return (
-    points.at(-1) ??
-    null
-  );
+  return points.at(-1) ?? null;
 }
 
 export default function InfrastructureLineLayer({
@@ -228,104 +191,136 @@ export default function InfrastructureLineLayer({
    * Fences render first.
    * Tracking renders afterwards.
    */
-  const orderedLines = [
-    ...lines,
-  ].sort(
+  const orderedLines = [...lines].sort(
     (a, b) => {
       if (
-        !isInfrastructureType(
-          a.type
-        ) ||
-        !isInfrastructureType(
-          b.type
-        )
+        !isInfrastructureType(a.type) ||
+        !isInfrastructureType(b.type)
       ) {
         return 0;
       }
 
       return (
-        RENDER_PRIORITY[
-          a.type
-        ] -
-        RENDER_PRIORITY[
-          b.type
-        ]
+        RENDER_PRIORITY[a.type] -
+        RENDER_PRIORITY[b.type]
       );
     }
   );
 
   return (
     <>
-      {orderedLines.map(
-        (line) => {
-          if (
-            !isInfrastructureType(
-              line.type
+      {orderedLines.map((line) => {
+        if (
+          !isInfrastructureType(
+            line.type
+          )
+        ) {
+          return null;
+        }
+
+        const status =
+          statuses[line.id] ??
+          line.status;
+
+        const selected =
+          selectedAreaId ===
+          line.id;
+
+        const urgentCount =
+          urgentTaskCounts[
+            line.id
+          ] ?? 0;
+
+        const lineConfig =
+          LINE_CONFIG[line.type];
+
+        const lineColour =
+          line.type === "fence" &&
+          status === "not_started"
+            ? "#111111"
+            : STATUS_CONFIG[
+                status
+              ]?.colour ??
+              STATUS_CONFIG
+                .not_started
+                .colour;
+
+        const lineOpacity =
+          status === "not_started"
+            ? selected
+              ? 0.82
+              : 0.54
+            : selected
+              ? 0.9
+              : 0.7;
+
+        const midpoint =
+          getLineMidpoint(
+            parsePoints(
+              line.points
             )
-          ) {
-            return null;
-          }
+          );
 
-          const status =
-            statuses[
-              line.id
-            ] ??
-            line.status;
+        return (
+          <g key={line.id}>
+            {/* INVISIBLE CLICK TARGET */}
+            {!traceMode && (
+              <polyline
+                points={
+                  line.points
+                }
+                fill="none"
+                stroke="transparent"
+                strokeWidth={
+                  lineConfig.hitWidth
+                }
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                vectorEffect="non-scaling-stroke"
+                pointerEvents="stroke"
+                className="cursor-pointer"
+                onClick={(
+                  event
+                ) => {
+                  event.stopPropagation();
 
-          const selected =
-            selectedAreaId ===
-            line.id;
+                  onSelectArea(
+                    line.id
+                  );
+                }}
+              />
+            )}
 
-          const urgentCount =
-            urgentTaskCounts[
-              line.id
-            ] ?? 0;
-
-          const lineConfig =
-            LINE_CONFIG[
-              line.type
-            ];
-
-          const lineColour =
-            line.type === "fence" && status === "not_started"
-                ? "#111111"
-                : STATUS_CONFIG[status]?.colour ??
-                STATUS_CONFIG.not_started.colour;
-
-          const lineOpacity =
-            status ===
-            "not_started"
-              ? selected
-                ? 0.82
-                : 0.54
-              : selected
-                ? 0.9
-                : 0.7;
-
-          const midpoint =
-            getLineMidpoint(
-              parsePoints(
+            {/* VISIBLE LINE */}
+            <polyline
+              points={
                 line.points
-              )
-            );
+              }
+              fill="none"
+              stroke={
+                lineColour
+              }
+              strokeWidth={
+                selected
+                  ? lineConfig.lineWidth +
+                    0.8
+                  : lineConfig.lineWidth
+              }
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeOpacity={
+                lineOpacity
+              }
+              vectorEffect="non-scaling-stroke"
+              pointerEvents="none"
+            />
 
-          return (
-            <g key={line.id}>
-              {/* INVISIBLE CLICK TARGET */}
-              {!traceMode && (
-                <polyline
-                  points={
-                    line.points
-                  }
-                  fill="none"
-                  stroke="transparent"
-                  strokeWidth={
-                    lineConfig.hitWidth
-                  }
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  vectorEffect="non-scaling-stroke"
-                  pointerEvents="stroke"
+            {/* URGENT ISSUE */}
+            {urgentCount >
+              0 &&
+              midpoint &&
+              !traceMode && (
+                <g
                   className="cursor-pointer"
                   onClick={(
                     event
@@ -336,101 +331,97 @@ export default function InfrastructureLineLayer({
                       line.id
                     );
                   }}
-                />
-              )}
+                >
+                  {/* LARGE INVISIBLE CLICK TARGET */}
+                  <circle
+                    cx={
+                      midpoint.x
+                    }
+                    cy={
+                      midpoint.y
+                    }
+                    r="40"
+                    fill="transparent"
+                    pointerEvents="all"
+                  />
 
-              {/* VISIBLE LINE */}
-              <polyline
-                points={
-                  line.points
-                }
-                fill="none"
-                stroke={
-                  lineColour
-                }
-                strokeWidth={
-                  selected
-                    ? lineConfig.lineWidth +
-                      0.8
-                    : lineConfig.lineWidth
-                }
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeOpacity={
-                  lineOpacity
-                }
-                vectorEffect="non-scaling-stroke"
-                pointerEvents="none"
-              />
-
-              {/* URGENT ISSUE */}
-              {urgentCount >
-                0 &&
-                midpoint &&
-                !traceMode && (
-                  <g
-                    className="cursor-pointer"
-                    onClick={(
-                      event
-                    ) => {
-                      event.stopPropagation();
-
-                      onSelectArea(
-                        line.id
-                      );
-                    }}
+                  {/* PULSING RED HALO */}
+                  <circle
+                    cx={
+                      midpoint.x
+                    }
+                    cy={
+                      midpoint.y
+                    }
+                    r="24"
+                    fill="none"
+                    stroke="#EF4444"
+                    strokeWidth="6"
+                    vectorEffect="non-scaling-stroke"
+                    pointerEvents="none"
                   >
-                    <circle
-                      cx={
-                        midpoint.x
-                      }
-                      cy={
-                        midpoint.y
-                      }
-                      r="36"
-                      fill="transparent"
-                      pointerEvents="all"
+                    <animate
+                      attributeName="r"
+                      values="24;38;24"
+                      dur="1.25s"
+                      repeatCount="indefinite"
                     />
 
-                    <circle
-                      cx={
-                        midpoint.x
-                      }
-                      cy={
-                        midpoint.y
-                      }
-                      r="24"
-                      fill="#DC2626"
-                      stroke="white"
-                      strokeWidth="3"
-                      vectorEffect="non-scaling-stroke"
-                      pointerEvents="none"
+                    <animate
+                      attributeName="opacity"
+                      values="0.95;0;0.95"
+                      dur="1.25s"
+                      repeatCount="indefinite"
                     />
 
-                    <text
-                      x={
-                        midpoint.x
-                      }
-                      y={
-                        midpoint.y
-                      }
-                      textAnchor="middle"
-                      dominantBaseline="central"
-                      fill="white"
-                      fontSize="25"
-                      fontWeight="700"
-                      pointerEvents="none"
-                    >
-                      {
-                        urgentCount
-                      }
-                    </text>
-                  </g>
-                )}
-            </g>
-          );
-        }
-      )}
+                    <animate
+                      attributeName="stroke-width"
+                      values="6;3;6"
+                      dur="1.25s"
+                      repeatCount="indefinite"
+                    />
+                  </circle>
+
+                  {/* MAIN URGENT ICON */}
+                  <circle
+                    cx={
+                      midpoint.x
+                    }
+                    cy={
+                      midpoint.y
+                    }
+                    r="24"
+                    fill="#DC2626"
+                    stroke="white"
+                    strokeWidth="3"
+                    vectorEffect="non-scaling-stroke"
+                    pointerEvents="none"
+                  />
+
+                  {/* URGENT TASK COUNT */}
+                  <text
+                    x={
+                      midpoint.x
+                    }
+                    y={
+                      midpoint.y
+                    }
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    fill="white"
+                    fontSize="25"
+                    fontWeight="700"
+                    pointerEvents="none"
+                  >
+                    {
+                      urgentCount
+                    }
+                  </text>
+                </g>
+              )}
+          </g>
+        );
+      })}
     </>
   );
 }
