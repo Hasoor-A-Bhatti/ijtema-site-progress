@@ -1,6 +1,7 @@
 "use client";
 
-import { GENERATOR_MARKER_SIZE } from "@/data/generators";
+import type { MouseEvent } from "react";
+
 import type { SiteGenerator } from "@/types/generators";
 
 interface GeneratorLayerProps {
@@ -10,11 +11,23 @@ interface GeneratorLayerProps {
   onSelectGenerator: (generatorId: string) => void;
 }
 
-const GENERATOR_NAVY = "#0F2747";
-const GENERATOR_NAVY_DARK = "#07182D";
+const GENERATOR_RED = "#DC2626";
+const GENERATOR_RED_SELECTED = "#B91C1C";
+const GENERATOR_BORDER_MAROON = "#7F1D1D";
 
-const DOWN_BLUE = "#2563EB";
-const DOWN_BLUE_BRIGHT = "#3B82F6";
+const ACTIVE_GREEN = "#22C55E";
+const INACTIVE_BLUE = "#3B82F6";
+
+const MARKER_SIZE = 27;
+
+function stopAndSelect(
+  event: MouseEvent<SVGGElement>,
+  generatorId: string,
+  onSelectGenerator: (generatorId: string) => void
+) {
+  event.stopPropagation();
+  onSelectGenerator(generatorId);
+}
 
 export default function GeneratorLayer({
   generators,
@@ -22,232 +35,273 @@ export default function GeneratorLayer({
   traceMode,
   onSelectGenerator,
 }: GeneratorLayerProps) {
-  const half = GENERATOR_MARKER_SIZE / 2;
-
   return (
     <>
       {generators.map((generator) => {
         const selected =
           selectedGeneratorId === generator.id;
 
-        const isDown =
-          generator.is_down;
+        const x = Number(generator.x);
+        const y = Number(generator.y);
+
+        if (
+          !Number.isFinite(x) ||
+          !Number.isFinite(y)
+        ) {
+          return null;
+        }
+
+        /*
+         * Existing generator status:
+         * is_down = true  -> inactive
+         * is_down = false -> active / operational
+         */
+        const active = !generator.is_down;
+
+        const pulseColour = active
+          ? ACTIVE_GREEN
+          : INACTIVE_BLUE;
+
+        const markerSize = selected
+          ? MARKER_SIZE + 4
+          : MARKER_SIZE;
+
+        const markerX =
+          x - markerSize / 2;
+
+        const markerY =
+          y - markerSize / 2;
 
         return (
-          <g key={generator.id}>
-            {/* GENERATOR DOWN WARNING */}
-            {isDown && (
-              <>
-                {/* BLUE PULSING HALO */}
-                <circle
-                  cx={generator.x}
-                  cy={generator.y}
-                  r={
-                    GENERATOR_MARKER_SIZE *
-                    0.82
-                  }
-                  fill="none"
-                  stroke={DOWN_BLUE_BRIGHT}
-                  strokeWidth={6}
-                  pointerEvents="none"
-                  vectorEffect="non-scaling-stroke"
-                  opacity={0.95}
-                >
-                  <animate
-                    attributeName="r"
-                    values={`${GENERATOR_MARKER_SIZE * 0.68};${GENERATOR_MARKER_SIZE * 1.22};${GENERATOR_MARKER_SIZE * 0.68}`}
-                    dur="1.35s"
-                    repeatCount="indefinite"
-                  />
-
-                  <animate
-                    attributeName="opacity"
-                    values="1;0.12;1"
-                    dur="1.35s"
-                    repeatCount="indefinite"
-                  />
-
-                  <animate
-                    attributeName="stroke-width"
-                    values="6;3;6"
-                    dur="1.35s"
-                    repeatCount="indefinite"
-                  />
-                </circle>
-
-                {/* SECOND SOFTER BLUE PULSE */}
-                <circle
-                  cx={generator.x}
-                  cy={generator.y}
-                  r={
-                    GENERATOR_MARKER_SIZE *
-                    0.7
-                  }
-                  fill="none"
-                  stroke={DOWN_BLUE}
-                  strokeWidth={3}
-                  pointerEvents="none"
-                  vectorEffect="non-scaling-stroke"
-                  opacity={0.65}
-                >
-                  <animate
-                    attributeName="r"
-                    values={`${GENERATOR_MARKER_SIZE * 0.7};${GENERATOR_MARKER_SIZE * 1.4}`}
-                    dur="1.35s"
-                    repeatCount="indefinite"
-                  />
-
-                  <animate
-                    attributeName="opacity"
-                    values="0.7;0"
-                    dur="1.35s"
-                    repeatCount="indefinite"
-                  />
-                </circle>
-
-                {/* EXCLAMATION BADGE */}
-                <circle
-                  cx={
-                    generator.x +
-                    half +
-                    8
-                  }
-                  cy={
-                    generator.y -
-                    half -
-                    8
-                  }
-                  r={9}
-                  fill={DOWN_BLUE}
-                  stroke="#FFFFFF"
-                  strokeWidth={2.2}
-                  vectorEffect="non-scaling-stroke"
-                  pointerEvents="none"
-                />
-
-                <text
-                  x={
-                    generator.x +
-                    half +
-                    8
-                  }
-                  y={
-                    generator.y -
-                    half -
-                    4.8
-                  }
-                  textAnchor="middle"
-                  fill="#FFFFFF"
-                  fontSize="12"
-                  fontWeight="900"
-                  pointerEvents="none"
-                >
-                  !
-                </text>
-              </>
-            )}
-
-            {/* LARGE INVISIBLE CLICK TARGET */}
+          <g
+            key={generator.id}
+            className={
+              traceMode
+                ? "pointer-events-none"
+                : "cursor-pointer"
+            }
+            onClick={
+              traceMode
+                ? undefined
+                : (event) =>
+                    stopAndSelect(
+                      event,
+                      generator.id,
+                      onSelectGenerator
+                    )
+            }
+            role={
+              traceMode
+                ? undefined
+                : "button"
+            }
+            aria-label={
+              traceMode
+                ? undefined
+                : `${generator.name}, ${generator.kva} kVA, ${
+                    active
+                      ? "active"
+                      : "inactive"
+                  }`
+            }
+          >
+            {/*
+             * INVISIBLE CLICK TARGET
+             *
+             * Keeps the small square easy to tap on phones.
+             */}
             {!traceMode && (
-              <rect
-                x={
-                  generator.x -
-                  half -
-                  12
-                }
-                y={
-                  generator.y -
-                  half -
-                  12
-                }
-                width={
-                  GENERATOR_MARKER_SIZE +
-                  24
-                }
-                height={
-                  GENERATOR_MARKER_SIZE +
-                  24
-                }
+              <circle
+                cx={x}
+                cy={y}
+                r={42}
                 fill="transparent"
                 pointerEvents="all"
-                className="cursor-pointer"
-                onClick={(event) => {
-                  event.stopPropagation();
-
-                  onSelectGenerator(
-                    generator.id
-                  );
-                }}
               />
             )}
 
-            {/* GENERATOR MARKER */}
+            {/*
+             * STATUS PULSE
+             *
+             * Green pulse = active / operational
+             * Blue pulse  = inactive / down
+             */}
+            <circle
+              cx={x}
+              cy={y}
+              r={19}
+              fill="none"
+              stroke={pulseColour}
+              strokeWidth={4}
+              opacity={0}
+              pointerEvents="none"
+            >
+              <animate
+                attributeName="r"
+                values="18;32"
+                dur="1.8s"
+                repeatCount="indefinite"
+              />
+              <animate
+                attributeName="opacity"
+                values="0.8;0"
+                dur="1.8s"
+                repeatCount="indefinite"
+              />
+              <animate
+                attributeName="stroke-width"
+                values="4;1"
+                dur="1.8s"
+                repeatCount="indefinite"
+              />
+            </circle>
+
+            {/*
+             * SECOND STAGGERED PULSE
+             *
+             * Gives the animation a smooth continuous effect.
+             */}
+            <circle
+              cx={x}
+              cy={y}
+              r={18}
+              fill="none"
+              stroke={pulseColour}
+              strokeWidth={3}
+              opacity={0}
+              pointerEvents="none"
+            >
+              <animate
+                attributeName="r"
+                values="18;29"
+                dur="1.8s"
+                begin="0.9s"
+                repeatCount="indefinite"
+              />
+              <animate
+                attributeName="opacity"
+                values="0.55;0"
+                dur="1.8s"
+                begin="0.9s"
+                repeatCount="indefinite"
+              />
+              <animate
+                attributeName="stroke-width"
+                values="3;1"
+                dur="1.8s"
+                begin="0.9s"
+                repeatCount="indefinite"
+              />
+            </circle>
+
+            {/*
+             * SELECTED OUTLINE
+             */}
+            {selected && (
+              <rect
+                x={markerX - 4}
+                y={markerY - 4}
+                width={markerSize + 8}
+                height={markerSize + 8}
+                rx={5}
+                fill="none"
+                stroke="white"
+                strokeWidth={3}
+                vectorEffect="non-scaling-stroke"
+                pointerEvents="none"
+              />
+            )}
+
+            {/*
+             * SIMPLE RED GENERATOR SQUARE
+             *
+             * Restores the original plain-map-marker look.
+             */}
             <rect
-              x={
-                generator.x -
-                half
-              }
-              y={
-                generator.y -
-                half
-              }
-              width={
-                GENERATOR_MARKER_SIZE
-              }
-              height={
-                GENERATOR_MARKER_SIZE
-              }
-              rx={2.2}
+              x={markerX}
+              y={markerY}
+              width={markerSize}
+              height={markerSize}
+              rx={3}
               fill={
-                GENERATOR_NAVY
-              }
-              stroke={
                 selected
-                  ? "#FFFFFF"
-                  : isDown
-                    ? DOWN_BLUE_BRIGHT
-                    : GENERATOR_NAVY_DARK
+                  ? GENERATOR_RED_SELECTED
+                  : GENERATOR_RED
               }
+              stroke={GENERATOR_BORDER_MAROON}
               strokeWidth={
                 selected
-                  ? 4
-                  : isDown
-                    ? 3.5
-                    : 2.4
+                  ? 3
+                  : 2.5
               }
               vectorEffect="non-scaling-stroke"
               pointerEvents="none"
             />
 
-            {/* GENERATOR NUMBER */}
+            {/*
+             * GENERATOR NAME
+             */}
             <text
-              x={generator.x}
-              y={
-                generator.y +
-                3.5
-              }
+              x={x}
+              y={y}
               textAnchor="middle"
-              fill="#FFFFFF"
-              fontSize="10"
+              dominantBaseline="central"
+              fill="white"
+              fontSize={
+                selected
+                  ? 13
+                  : 11.5
+              }
               fontWeight="800"
               pointerEvents="none"
             >
-              {generator.name.replace(
-                "G",
-                ""
-              )}
+              {generator.name}
             </text>
 
-            <title>
-              {generator.name} ·{" "}
+            {/*
+             * kVA LABEL
+             */}
+            <text
+              x={x}
+              y={markerY + markerSize + 12}
+              textAnchor="middle"
+              dominantBaseline="central"
+              fill="#7F1D1D"
+              fontSize={11}
+              fontWeight="800"
+              pointerEvents="none"
+              style={{
+                paintOrder: "stroke",
+                stroke: "white",
+                strokeWidth: 4,
+                strokeLinejoin:
+                  "round",
+              }}
+            >
               {generator.kva} kVA
-              {generator.is_down
-                ? " · GENERATOR DOWN"
-                : ""}
-              {generator.description
-                ? ` · ${generator.description}`
-                : ""}
-            </title>
+            </text>
+
+            {/*
+             * SMALL STATUS DOT
+             *
+             * Matches the pulse:
+             * green = active
+             * blue  = inactive
+             */}
+            <circle
+              cx={
+                markerX +
+                markerSize -
+                3
+              }
+              cy={markerY + 3}
+              r={3.4}
+              fill={pulseColour}
+              stroke="white"
+              strokeWidth={1.5}
+              vectorEffect="non-scaling-stroke"
+              pointerEvents="none"
+            />
           </g>
         );
       })}

@@ -22,7 +22,7 @@ interface UrgentTasksListProps {
   areaName: string;
 }
 
-interface LajnaAccessState {
+interface RestrictedTaskAccessState {
   authorised: boolean;
   username: string | null;
 }
@@ -80,7 +80,16 @@ export default function UrgentTasksList({
     lajnaAccess,
     setLajnaAccess,
   ] =
-    useState<LajnaAccessState>({
+    useState<RestrictedTaskAccessState>({
+      authorised: false,
+      username: null,
+    });
+
+  const [
+    ansarAccess,
+    setAnsarAccess,
+  ] =
+    useState<RestrictedTaskAccessState>({
       authorised: false,
       username: null,
     });
@@ -94,6 +103,18 @@ export default function UrgentTasksList({
   const [
     showLajnaLogin,
     setShowLajnaLogin,
+  ] =
+    useState(false);
+
+  const [
+    checkingAnsar,
+    setCheckingAnsar,
+  ] =
+    useState(false);
+
+  const [
+    showAnsarLogin,
+    setShowAnsarLogin,
   ] =
     useState(false);
 
@@ -139,6 +160,14 @@ export default function UrgentTasksList({
         "lajna"
       );
 
+  const isAnsarArea =
+    areaName
+      .trim()
+      .toLowerCase()
+      .startsWith(
+        "ansar"
+      );
+
   /*
    * Full site editors can already edit
    * everything.
@@ -151,6 +180,10 @@ export default function UrgentTasksList({
     (
       isLajnaArea &&
       lajnaAccess.authorised
+    ) ||
+    (
+      isAnsarArea &&
+      ansarAccess.authorised
     );
 
   /*
@@ -331,6 +364,98 @@ export default function UrgentTasksList({
   ]);
 
   /*
+   * CHECK WHETHER THIS BROWSER ALREADY
+   * HAS AN ANSAR TASK SESSION.
+   *
+   * Only necessary while looking at an
+   * Ansar area and when the user is not
+   * already a full editor.
+   */
+  useEffect(() => {
+    if (
+      canEdit ||
+      !isAnsarArea
+    ) {
+      return;
+    }
+
+    let cancelled =
+      false;
+
+    async function checkAccess() {
+      setCheckingAnsar(
+        true
+      );
+
+      try {
+        const response =
+          await fetch(
+            "/api/ansar-access",
+            {
+              cache:
+                "no-store",
+            }
+          );
+
+        const data =
+          (await response
+            .json()
+            .catch(
+              () => null
+            )) as
+            | {
+                authorised?: boolean;
+                username?: string | null;
+              }
+            | null;
+
+        if (
+          !cancelled
+        ) {
+          setAnsarAccess({
+            authorised:
+              Boolean(
+                data?.authorised
+              ),
+            username:
+              data?.username ??
+              null,
+          });
+        }
+      } catch {
+        if (
+          !cancelled
+        ) {
+          setAnsarAccess({
+            authorised:
+              false,
+            username:
+              null,
+          });
+        }
+      } finally {
+        if (
+          !cancelled
+        ) {
+          setCheckingAnsar(
+            false
+          );
+        }
+      }
+    }
+
+    void checkAccess();
+
+    return () => {
+      cancelled =
+        true;
+    };
+  }, [
+    canEdit,
+    isAnsarArea,
+  ]);
+
+  /*
    * LAJNA LOGIN
    */
   async function signInLajna(
@@ -465,6 +590,140 @@ export default function UrgentTasksList({
   }
 
   /*
+   * ANSAR LOGIN
+   */
+  async function signInAnsar(
+    event: React.FormEvent
+  ) {
+    event.preventDefault();
+
+    if (
+      !username.trim() ||
+      !password
+    ) {
+      setLoginError(
+        "Enter your username and password."
+      );
+
+      return;
+    }
+
+    setSigningIn(
+      true
+    );
+
+    setLoginError(
+      null
+    );
+
+    try {
+      const response =
+        await fetch(
+          "/api/ansar-access",
+          {
+            method:
+              "POST",
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+            body:
+              JSON.stringify(
+                {
+                  username:
+                    username.trim(),
+                  password,
+                }
+              ),
+          }
+        );
+
+      const data =
+        (await response
+          .json()
+          .catch(
+            () => null
+          )) as
+          | {
+              success?: boolean;
+              authorised?: boolean;
+              username?: string | null;
+              error?: string;
+            }
+          | null;
+
+      if (
+        !response.ok ||
+        !data?.authorised
+      ) {
+        throw new Error(
+          data?.error ??
+            "The username or password was not accepted."
+        );
+      }
+
+      setAnsarAccess({
+        authorised:
+          true,
+        username:
+          data.username ??
+          username.trim(),
+      });
+
+      setPassword(
+        ""
+      );
+
+      setShowAnsarLogin(
+        false
+      );
+    } catch (
+      signInError
+    ) {
+      setLoginError(
+        signInError instanceof
+          Error
+          ? signInError.message
+          : "Ansar task access could not be enabled."
+      );
+    } finally {
+      setSigningIn(
+        false
+      );
+    }
+  }
+
+  /*
+   * ANSAR LOGOUT
+   */
+  async function signOutAnsar() {
+    try {
+      await fetch(
+        "/api/ansar-access",
+        {
+          method:
+            "DELETE",
+        }
+      );
+    } finally {
+      setAnsarAccess({
+        authorised:
+          false,
+        username:
+          null,
+      });
+
+      setUsername(
+        ""
+      );
+
+      setPassword(
+        ""
+      );
+    }
+  }
+
+  /*
    * ADD URGENT TASK
    */
   async function addTask() {
@@ -564,10 +823,10 @@ export default function UrgentTasksList({
   /*
    * EXISTING ADMIN-ONLY UPDATE
    *
-   * Lajna users cannot complete/reopen
-   * existing tasks. This keeps their
-   * permission specifically to RAISING
-   * urgent tasks.
+   * Restricted Lajna / Ansar users cannot
+   * complete/reopen existing tasks. Their
+   * permission is specifically limited to
+   * RAISING urgent tasks.
    */
   async function toggleTask(
     task: UrgentTask
@@ -792,6 +1051,26 @@ export default function UrgentTasksList({
               </button>
             </div>
           )}
+
+        {!canEdit &&
+          isAnsarArea &&
+          ansarAccess.authorised && (
+            <div className="flex items-center gap-2">
+              <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700">
+                Ansar Access
+              </span>
+
+              <button
+                type="button"
+                onClick={() =>
+                  void signOutAnsar()
+                }
+                className="text-[11px] font-semibold text-slate-400 transition hover:text-slate-700"
+              >
+                Log out
+              </button>
+            </div>
+          )}
       </div>
 
       {error && (
@@ -977,6 +1256,134 @@ export default function UrgentTasksList({
         isLajnaArea && (
           <p className="mt-3 text-xs text-slate-400">
             Checking Lajna task access…
+          </p>
+        )}
+
+      {/* ANSAR LOGIN */}
+      {!canEdit &&
+        isAnsarArea &&
+        !ansarAccess.authorised &&
+        !checkingAnsar && (
+          <div className="mt-3">
+            {!showAnsarLogin ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAnsarLogin(
+                    true
+                  );
+
+                  setLoginError(
+                    null
+                  );
+                }}
+                className="w-full rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
+              >
+                Ansar Task Access
+              </button>
+            ) : (
+              <form
+                onSubmit={
+                  signInAnsar
+                }
+                className="rounded-xl border border-blue-200 bg-blue-50 p-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-blue-900">
+                      Ansar Task Access
+                    </p>
+
+                    <p className="mt-0.5 text-xs leading-5 text-blue-700">
+                      Sign in to raise urgent tasks for Ansar areas.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAnsarLogin(
+                        false
+                      );
+
+                      setLoginError(
+                        null
+                      );
+                    }}
+                    className="text-lg leading-none text-blue-400 hover:text-blue-700"
+                    aria-label="Close Ansar login"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <div className="mt-3 grid gap-2">
+                  <input
+                    type="text"
+                    autoComplete="username"
+                    value={
+                      username
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setUsername(
+                        event.target
+                          .value
+                      )
+                    }
+                    placeholder="Username"
+                    className="h-10 rounded-xl border border-blue-200 bg-white px-3 text-sm text-slate-950 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                  />
+
+                  <input
+                    type="password"
+                    autoComplete="current-password"
+                    value={
+                      password
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setPassword(
+                        event.target
+                          .value
+                      )
+                    }
+                    placeholder="Password"
+                    className="h-10 rounded-xl border border-blue-200 bg-white px-3 text-sm text-slate-950 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                  />
+                </div>
+
+                {loginError && (
+                  <p className="mt-2 text-xs font-medium text-red-600">
+                    {
+                      loginError
+                    }
+                  </p>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={
+                    signingIn
+                  }
+                  className="mt-3 h-10 w-full rounded-xl bg-blue-600 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {signingIn
+                    ? "Signing in…"
+                    : "Sign in"}
+                </button>
+              </form>
+            )}
+          </div>
+        )}
+
+      {checkingAnsar &&
+        !canEdit &&
+        isAnsarArea && (
+          <p className="mt-3 text-xs text-slate-400">
+            Checking Ansar task access…
           </p>
         )}
 
