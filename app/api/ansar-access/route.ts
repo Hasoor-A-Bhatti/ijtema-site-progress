@@ -13,41 +13,72 @@ import { cookies } from "next/headers";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ANSAR_ACCESS_COOKIE =
+const ACCESS_COOKIE =
   "ijtema_ansar_task_access";
 
 const SESSION_DURATION_SECONDS =
   60 * 60 * 12;
 
-/*
- * These mirror the Lajna login style,
- * just changed to Ansar.
- *
- * You can change the usernames/passwords
- * here if you want.
- */
-const ANSAR_USERS = [
-  {
-    username: "AnsarSite1",
-    password: "AnsarTask2026A!",
-  },
-  {
-    username: "AnsarSite2",
-    password: "AnsarTask2026B!",
-  },
-];
+const DEFAULT_PHONE =
+  "07480852059";
 
-interface SessionPayload {
+interface TaskUser {
   username: string;
+  password: string;
+  phone: string;
+}
+
+export interface AnsarTaskSession {
+  username: string;
+  phone: string;
   expiresAt: number;
 }
 
+/*
+ * Two accounts only for now.
+ *
+ * Both default to the number supplied:
+ * 07480852059
+ *
+ * Change the `phone` value here later if
+ * either account needs a different recipient.
+ */
+const USERS: TaskUser[] = [
+  {
+    username:
+      "AnsarSite1",
+    password:
+      "AnsarTask2026A!",
+    phone:
+      DEFAULT_PHONE,
+  },
+  {
+    username:
+      "AnsarSite2",
+    password:
+      "AnsarTask2026B!",
+    phone:
+      DEFAULT_PHONE,
+  },
+];
+
 function getSecret() {
-  return (
-    process.env.ANSAR_ACCESS_SECRET ??
-    process.env.EDITOR_SESSION_SECRET ??
-    "national-ijtema-2026-ansar-access"
-  );
+  const secret =
+    process.env
+      .ANSAR_TASK_SESSION_SECRET ??
+    process.env
+      .EDITOR_SESSION_SECRET;
+
+  if (
+    !secret ||
+    secret.length < 24
+  ) {
+    throw new Error(
+      "Ansar task session secret is missing or too short. Add ANSAR_TASK_SESSION_SECRET (recommended) or ensure EDITOR_SESSION_SECRET is configured."
+    );
+  }
+
+  return secret;
 }
 
 function safeEqual(
@@ -55,10 +86,16 @@ function safeEqual(
   second: string
 ) {
   const firstBuffer =
-    Buffer.from(first, "utf8");
+    Buffer.from(
+      first,
+      "utf8"
+    );
 
   const secondBuffer =
-    Buffer.from(second, "utf8");
+    Buffer.from(
+      second,
+      "utf8"
+    );
 
   if (
     firstBuffer.length !==
@@ -81,14 +118,21 @@ function sign(
     getSecret()
   )
     .update(value)
-    .digest("base64url");
+    .digest(
+      "base64url"
+    );
 }
 
 function createToken(
-  username: string
+  user: TaskUser
 ) {
-  const payload: SessionPayload = {
-    username,
+  const payload:
+    AnsarTaskSession =
+  {
+    username:
+      user.username,
+    phone:
+      user.phone,
     expiresAt:
       Date.now() +
       SESSION_DURATION_SECONDS *
@@ -97,21 +141,24 @@ function createToken(
 
   const encoded =
     Buffer.from(
-      JSON.stringify(payload),
+      JSON.stringify(
+        payload
+      ),
       "utf8"
-    ).toString("base64url");
+    ).toString(
+      "base64url"
+    );
 
-  const signature =
-    sign(encoded);
-
-  return `${encoded}.${signature}`;
+  return `${encoded}.${sign(
+    encoded
+  )}`;
 }
 
 function verifyToken(
   token:
     | string
     | undefined
-) {
+): AnsarTaskSession | null {
   if (!token) {
     return null;
   }
@@ -129,8 +176,15 @@ function verifyToken(
     return null;
   }
 
-  const expectedSignature =
-    sign(encoded);
+  let expectedSignature:
+    string;
+
+  try {
+    expectedSignature =
+      sign(encoded);
+  } catch {
+    return null;
+  }
 
   if (
     !safeEqual(
@@ -147,21 +201,22 @@ function verifyToken(
         Buffer.from(
           encoded,
           "base64url"
-        ).toString("utf8")
-      ) as SessionPayload;
+        ).toString(
+          "utf8"
+        )
+      ) as
+        AnsarTaskSession;
 
     if (
+      !payload ||
       typeof payload.username !==
         "string" ||
+      typeof payload.phone !==
+        "string" ||
       typeof payload.expiresAt !==
-        "number"
-    ) {
-      return null;
-    }
-
-    if (
-      payload.expiresAt <
-      Date.now()
+        "number" ||
+      payload.expiresAt <=
+        Date.now()
     ) {
       return null;
     }
@@ -189,20 +244,29 @@ function isHttps(
         "https:";
 }
 
-/*
- * CHECK CURRENT ANSAR SESSION
- */
-export async function GET() {
+export async function getAnsarTaskSession():
+  Promise<
+    AnsarTaskSession | null
+  > {
   const cookieStore =
     await cookies();
 
-  const token =
+  return verifyToken(
     cookieStore.get(
-      ANSAR_ACCESS_COOKIE
-    )?.value;
+      ACCESS_COOKIE
+    )?.value
+  );
+}
 
+/*
+ * GET
+ * Check the current restricted task session.
+ *
+ * The phone number deliberately stays server-side.
+ */
+export async function GET() {
   const session =
-    verifyToken(token);
+    await getAnsarTaskSession();
 
   return NextResponse.json({
     success: true,
@@ -211,40 +275,41 @@ export async function GET() {
     username:
       session?.username ??
       null,
+    smsEnabled:
+      Boolean(session),
   });
 }
 
 /*
- * ANSAR LOGIN
+ * POST
+ * Restricted urgent-task login.
  */
 export async function POST(
   request: NextRequest
 ) {
-  let body: unknown;
-
-  try {
-    body =
-      await request.json();
-  } catch {
-    return NextResponse.json(
-      {
-        error:
-          "Enter your Ansar username and password.",
-      },
-      {
-        status: 400,
-      }
-    );
-  }
+  const body =
+    (await request
+      .json()
+      .catch(
+        () => null
+      )) as
+      | {
+          username?: unknown;
+          password?: unknown;
+        }
+      | null;
 
   if (
-    typeof body !== "object" ||
-    body === null
+    !body ||
+    typeof body.username !==
+      "string" ||
+    typeof body.password !==
+      "string"
   ) {
     return NextResponse.json(
       {
         error:
-          "Enter your Ansar username and password.",
+          "Enter your username and password.",
       },
       {
         status: 400,
@@ -253,42 +318,14 @@ export async function POST(
   }
 
   const username =
-    (
-      body as {
-        username?: unknown;
-      }
-    ).username;
-
-  const password =
-    (
-      body as {
-        password?: unknown;
-      }
-    ).password;
-
-  if (
-    typeof username !==
-      "string" ||
-    typeof password !==
-      "string"
-  ) {
-    return NextResponse.json(
-      {
-        error:
-          "Enter your Ansar username and password.",
-      },
-      {
-        status: 400,
-      }
-    );
-  }
+    body.username.trim();
 
   const user =
-    ANSAR_USERS.find(
+    USERS.find(
       (candidate) =>
         safeEqual(
           candidate.username,
-          username.trim()
+          username
         )
     );
 
@@ -296,13 +333,13 @@ export async function POST(
     !user ||
     !safeEqual(
       user.password,
-      password
+      body.password
     )
   ) {
     return NextResponse.json(
       {
         error:
-          "Invalid Ansar credentials.",
+          "The username or password was not accepted.",
       },
       {
         status: 401,
@@ -310,16 +347,33 @@ export async function POST(
     );
   }
 
-  const token =
-    createToken(
-      user.username
+  let token: string;
+
+  try {
+    token =
+      createToken(user);
+  } catch (error) {
+    console.error(
+      "Ansar task access configuration error:",
+      error
     );
+
+    return NextResponse.json(
+      {
+        error:
+          "Ansar task access is not configured correctly.",
+      },
+      {
+        status: 500,
+      }
+    );
+  }
 
   const cookieStore =
     await cookies();
 
   cookieStore.set(
-    ANSAR_ACCESS_COOKIE,
+    ACCESS_COOKIE,
     token,
     {
       httpOnly: true,
@@ -337,11 +391,13 @@ export async function POST(
     authorised: true,
     username:
       user.username,
+    smsEnabled: true,
   });
 }
 
 /*
- * ANSAR LOGOUT
+ * DELETE
+ * Restricted-task logout only.
  */
 export async function DELETE(
   request: NextRequest
@@ -350,7 +406,7 @@ export async function DELETE(
     await cookies();
 
   cookieStore.set(
-    ANSAR_ACCESS_COOKIE,
+    ACCESS_COOKIE,
     "",
     {
       httpOnly: true,
@@ -366,23 +422,4 @@ export async function DELETE(
     success: true,
     authorised: false,
   });
-}
-
-/*
- * This helper is exported so the existing
- * urgent-tasks route can verify Ansar access
- * without creating another file.
- */
-export async function hasAnsarTaskAccess() {
-  const cookieStore =
-    await cookies();
-
-  const token =
-    cookieStore.get(
-      ANSAR_ACCESS_COOKIE
-    )?.value;
-
-  return Boolean(
-    verifyToken(token)
-  );
 }

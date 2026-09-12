@@ -1,337 +1,425 @@
-import crypto from "crypto";
+import {
+  createHmac,
+  timingSafeEqual,
+} from "crypto";
+
+import {
+  NextRequest,
+  NextResponse,
+} from "next/server";
+
 import { cookies } from "next/headers";
-import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const COOKIE_NAME = "ijtema_lajna_task_access";
-const SESSION_SECONDS = 12 * 60 * 60;
+const ACCESS_COOKIE =
+  "ijtema_lajna_task_access";
 
-interface LajnaSession {
+const SESSION_DURATION_SECONDS =
+  60 * 60 * 12;
+
+const DEFAULT_PHONE =
+  "07480852059";
+
+interface TaskUser {
   username: string;
-  exp: number;
+  password: string;
+  phone: string;
 }
+
+export interface LajnaTaskSession {
+  username: string;
+  phone: string;
+  expiresAt: number;
+}
+
+/*
+ * Two accounts only for now.
+ *
+ * Both default to the number supplied:
+ * 07480852059
+ *
+ * Change the `phone` value here later if
+ * either account needs a different recipient.
+ */
+const USERS: TaskUser[] = [
+  {
+    username:
+      "LajnaSite1",
+    password:
+      "LajnaTask2026A!",
+    phone:
+      DEFAULT_PHONE,
+  },
+  {
+    username:
+      "LajnaSite2",
+    password:
+      "LajnaTask2026B!",
+    phone:
+      DEFAULT_PHONE,
+  },
+];
 
 function getSecret() {
   const secret =
-    process.env.LAJNA_TASK_SESSION_SECRET;
+    process.env
+      .LAJNA_TASK_SESSION_SECRET ??
+    process.env
+      .EDITOR_SESSION_SECRET;
 
-  if (!secret) {
+  if (
+    !secret ||
+    secret.length < 24
+  ) {
     throw new Error(
-      "LAJNA_TASK_SESSION_SECRET is not configured."
+      "Lajna task session secret is missing or too short. Add LAJNA_TASK_SESSION_SECRET (recommended) or ensure EDITOR_SESSION_SECRET is configured."
     );
   }
 
   return secret;
 }
 
-function getUsers(): Record<string, string> {
-  const raw =
-    process.env.LAJNA_TASK_USERS_JSON;
-
-  if (!raw) {
-    throw new Error(
-      "LAJNA_TASK_USERS_JSON is not configured."
-    );
-  }
-
-  try {
-    const parsed = JSON.parse(raw);
-
-    if (
-      !parsed ||
-      typeof parsed !== "object" ||
-      Array.isArray(parsed)
-    ) {
-      throw new Error();
-    }
-
-    return parsed as Record<string, string>;
-  } catch {
-    throw new Error(
-      "LAJNA_TASK_USERS_JSON is invalid."
-    );
-  }
-}
-
-function sign(value: string) {
-  return crypto
-    .createHmac("sha256", getSecret())
-    .update(value)
-    .digest("base64url");
-}
-
-function createToken(
-  session: LajnaSession
-) {
-  const encoded = Buffer.from(
-    JSON.stringify(session)
-  ).toString("base64url");
-
-  return `${encoded}.${sign(encoded)}`;
-}
-
-function safeCompare(
+function safeEqual(
   first: string,
   second: string
 ) {
-  const a = Buffer.from(first);
-  const b = Buffer.from(second);
+  const firstBuffer =
+    Buffer.from(
+      first,
+      "utf8"
+    );
 
-  if (a.length !== b.length) {
+  const secondBuffer =
+    Buffer.from(
+      second,
+      "utf8"
+    );
+
+  if (
+    firstBuffer.length !==
+    secondBuffer.length
+  ) {
     return false;
   }
 
-  return crypto.timingSafeEqual(a, b);
+  return timingSafeEqual(
+    firstBuffer,
+    secondBuffer
+  );
+}
+
+function sign(
+  value: string
+) {
+  return createHmac(
+    "sha256",
+    getSecret()
+  )
+    .update(value)
+    .digest(
+      "base64url"
+    );
+}
+
+function createToken(
+  user: TaskUser
+) {
+  const payload:
+    LajnaTaskSession =
+  {
+    username:
+      user.username,
+    phone:
+      user.phone,
+    expiresAt:
+      Date.now() +
+      SESSION_DURATION_SECONDS *
+        1000,
+  };
+
+  const encoded =
+    Buffer.from(
+      JSON.stringify(
+        payload
+      ),
+      "utf8"
+    ).toString(
+      "base64url"
+    );
+
+  return `${encoded}.${sign(
+    encoded
+  )}`;
 }
 
 function verifyToken(
-  token: string
-): LajnaSession | null {
-  try {
-    const [encoded, signature] =
-      token.split(".");
-
-    if (!encoded || !signature) {
-      return null;
-    }
-
-    const expected =
-      sign(encoded);
-
-    if (
-      !safeCompare(
-        signature,
-        expected
-      )
-    ) {
-      return null;
-    }
-
-    const session = JSON.parse(
-      Buffer.from(
-        encoded,
-        "base64url"
-      ).toString("utf8")
-    ) as LajnaSession;
-
-    if (
-      !session ||
-      typeof session.username !==
-        "string" ||
-      !Number.isFinite(session.exp)
-    ) {
-      return null;
-    }
-
-    if (
-      session.exp <=
-      Math.floor(
-        Date.now() / 1000
-      )
-    ) {
-      return null;
-    }
-
-    return session;
-  } catch {
-    return null;
-  }
-}
-
-export async function getLajnaTaskSession() {
-  const cookieStore =
-    await cookies();
-
-  const token =
-    cookieStore.get(
-      COOKIE_NAME
-    )?.value;
-
+  token:
+    | string
+    | undefined
+): LajnaTaskSession | null {
   if (!token) {
     return null;
   }
 
-  return verifyToken(token);
+  const [
+    encoded,
+    suppliedSignature,
+  ] =
+    token.split(".");
+
+  if (
+    !encoded ||
+    !suppliedSignature
+  ) {
+    return null;
+  }
+
+  let expectedSignature:
+    string;
+
+  try {
+    expectedSignature =
+      sign(encoded);
+  } catch {
+    return null;
+  }
+
+  if (
+    !safeEqual(
+      suppliedSignature,
+      expectedSignature
+    )
+  ) {
+    return null;
+  }
+
+  try {
+    const payload =
+      JSON.parse(
+        Buffer.from(
+          encoded,
+          "base64url"
+        ).toString(
+          "utf8"
+        )
+      ) as
+        LajnaTaskSession;
+
+    if (
+      !payload ||
+      typeof payload.username !==
+        "string" ||
+      typeof payload.phone !==
+        "string" ||
+      typeof payload.expiresAt !==
+        "number" ||
+      payload.expiresAt <=
+        Date.now()
+    ) {
+      return null;
+    }
+
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+function isHttps(
+  request: NextRequest
+) {
+  const forwardedProtocol =
+    request.headers.get(
+      "x-forwarded-proto"
+    );
+
+  return forwardedProtocol
+    ? forwardedProtocol ===
+        "https"
+    : new URL(
+        request.url
+      ).protocol ===
+        "https:";
+}
+
+export async function getLajnaTaskSession():
+  Promise<
+    LajnaTaskSession | null
+  > {
+  const cookieStore =
+    await cookies();
+
+  return verifyToken(
+    cookieStore.get(
+      ACCESS_COOKIE
+    )?.value
+  );
 }
 
 /*
  * GET
- * Check whether a Lajna task session exists.
+ * Check the current restricted task session.
+ *
+ * The phone number deliberately stays server-side.
  */
 export async function GET() {
-  try {
-    const session =
-      await getLajnaTaskSession();
+  const session =
+    await getLajnaTaskSession();
 
-    return NextResponse.json({
-      authorised: Boolean(session),
-      username:
-        session?.username ??
-        null,
-    });
-  } catch (error) {
-    console.error(
-      "Lajna access check failed:",
-      error
-    );
-
-    return NextResponse.json(
-      {
-        authorised: false,
-        username: null,
-      },
-      {
-        status: 500,
-      }
-    );
-  }
+  return NextResponse.json({
+    success: true,
+    authorised:
+      Boolean(session),
+    username:
+      session?.username ??
+      null,
+    smsEnabled:
+      Boolean(session),
+  });
 }
 
 /*
  * POST
- * Sign into the restricted Lajna
- * urgent-task account.
+ * Restricted urgent-task login.
  */
 export async function POST(
-  request: Request
+  request: NextRequest
 ) {
-  try {
-    const body =
-      (await request
-        .json()
-        .catch(() => null)) as
-        | {
-            username?: unknown;
-            password?: unknown;
-          }
-        | null;
-
-    if (
-      !body ||
-      typeof body.username !==
-        "string" ||
-      typeof body.password !==
-        "string"
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "Enter a username and password.",
-        },
-        {
-          status: 400,
+  const body =
+    (await request
+      .json()
+      .catch(
+        () => null
+      )) as
+      | {
+          username?: unknown;
+          password?: unknown;
         }
-      );
-    }
+      | null;
 
-    const username =
-      body.username.trim();
-
-    const password =
-      body.password;
-
-    const users =
-      getUsers();
-
-    const expectedPassword =
-      users[username];
-
-    if (
-      !expectedPassword ||
-      !safeCompare(
-        password,
-        expectedPassword
-      )
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "The username or password is incorrect.",
-        },
-        {
-          status: 401,
-        }
-      );
-    }
-
-    const exp =
-      Math.floor(
-        Date.now() / 1000
-      ) + SESSION_SECONDS;
-
-    const token =
-      createToken({
-        username,
-        exp,
-      });
-
-    const response =
-      NextResponse.json({
-        success: true,
-        authorised: true,
-        username,
-      });
-
-    response.cookies.set(
-      COOKIE_NAME,
-      token,
+  if (
+    !body ||
+    typeof body.username !==
+      "string" ||
+    typeof body.password !==
+      "string"
+  ) {
+    return NextResponse.json(
       {
-        httpOnly: true,
-        secure:
-          process.env.NODE_ENV ===
-          "production",
-        sameSite: "lax",
-        path: "/",
-        maxAge:
-          SESSION_SECONDS,
+        error:
+          "Enter your username and password.",
+      },
+      {
+        status: 400,
       }
     );
+  }
 
-    return response;
+  const username =
+    body.username.trim();
+
+  const user =
+    USERS.find(
+      (candidate) =>
+        safeEqual(
+          candidate.username,
+          username
+        )
+    );
+
+  if (
+    !user ||
+    !safeEqual(
+      user.password,
+      body.password
+    )
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          "The username or password was not accepted.",
+      },
+      {
+        status: 401,
+      }
+    );
+  }
+
+  let token: string;
+
+  try {
+    token =
+      createToken(user);
   } catch (error) {
     console.error(
-      "Lajna login failed:",
+      "Lajna task access configuration error:",
       error
     );
 
     return NextResponse.json(
       {
         error:
-          "Lajna task access could not be checked.",
+          "Lajna task access is not configured correctly.",
       },
       {
         status: 500,
       }
     );
   }
+
+  const cookieStore =
+    await cookies();
+
+  cookieStore.set(
+    ACCESS_COOKIE,
+    token,
+    {
+      httpOnly: true,
+      sameSite: "lax",
+      secure:
+        isHttps(request),
+      path: "/",
+      maxAge:
+        SESSION_DURATION_SECONDS,
+    }
+  );
+
+  return NextResponse.json({
+    success: true,
+    authorised: true,
+    username:
+      user.username,
+    smsEnabled: true,
+  });
 }
 
 /*
  * DELETE
- * Log out of Lajna task access.
+ * Restricted-task logout only.
  */
-export async function DELETE() {
-  const response =
-    NextResponse.json({
-      success: true,
-      authorised: false,
-    });
+export async function DELETE(
+  request: NextRequest
+) {
+  const cookieStore =
+    await cookies();
 
-  response.cookies.set(
-    COOKIE_NAME,
+  cookieStore.set(
+    ACCESS_COOKIE,
     "",
     {
       httpOnly: true,
-      secure:
-        process.env.NODE_ENV ===
-        "production",
       sameSite: "lax",
+      secure:
+        isHttps(request),
       path: "/",
       maxAge: 0,
     }
   );
 
-  return response;
+  return NextResponse.json({
+    success: true,
+    authorised: false,
+  });
 }

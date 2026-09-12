@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 
 import { hasValidEditorSession } from "@/lib/auth/requireEditorSession";
+import { sendUrgentTaskResolvedSms } from "@/lib/sms/urgentTaskSms";
 import { supabaseServer } from "@/lib/supabaseServer";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 interface RouteContext {
   params: Promise<{
@@ -9,172 +13,175 @@ interface RouteContext {
   }>;
 }
 
+interface ExistingTask {
+  id: string;
+  area_id: string;
+  task_text: string;
+  completed: boolean;
+  raised_by_username: string | null;
+  raised_by_phone: string | null;
+  completion_sms_sent_at: string | null;
+}
+
 /*
- * COMPLETE / REOPEN URGENT TASK
+ * PATCH
+ *
+ * Still ADMIN / FULL EDITOR only.
+ *
+ * When a restricted-account task genuinely changes
+ * from unresolved -> resolved, send one SMS to the
+ * registered account phone.
  */
 export async function PATCH(
   request: Request,
   context: RouteContext
 ) {
-  /*
-   * 1. AUTHORISATION
-   */
-  const authorised = await hasValidEditorSession();
+  const authorised =
+    await hasValidEditorSession();
 
   if (!authorised) {
     return NextResponse.json(
-      { error: "Editing access is required." },
-      { status: 401 }
+      {
+        error:
+          "Editing access is required.",
+      },
+      {
+        status: 401,
+      }
     );
   }
 
-  const { taskId } = await context.params;
-
-  /*
-   * 2. READ REQUEST
-   */
-  let body: unknown;
-
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json(
-      { error: "Invalid request body." },
-      { status: 400 }
-    );
-  }
-
-  const completed =
-    typeof body === "object" &&
-    body !== null &&
-    "completed" in body
-      ? (body as { completed?: unknown }).completed
-      : undefined;
-
-  if (typeof completed !== "boolean") {
-    return NextResponse.json(
-      { error: "A valid completed value is required." },
-      { status: 400 }
-    );
-  }
-
-  /*
-   * 3. FIND EXISTING TASK
-   *
-   * Keep the previous state so that if a later
-   * operation fails, the task can be restored
-   * exactly as it was.
-   */
   const {
-    data: existingTask,
-    error: taskLookupError,
-  } = await supabaseServer
-    .from("urgent_tasks")
-    .select("id, area_id, completed, completed_at")
-    .eq("id", taskId)
-    .maybeSingle();
+    taskId,
+  } =
+    await context.params;
 
-  if (taskLookupError) {
-    console.error(
-      "Failed to retrieve urgent task:",
-      taskLookupError
-    );
+  const cleanTaskId =
+    taskId?.trim();
 
+  if (!cleanTaskId) {
     return NextResponse.json(
-      { error: "The urgent task could not be checked." },
-      { status: 500 }
+      {
+        error:
+          "A valid urgent task is required.",
+      },
+      {
+        status: 400,
+      }
     );
   }
 
-  if (!existingTask) {
+  const body =
+    (await request
+      .json()
+      .catch(
+        () => null
+      )) as
+      | {
+          completed?: unknown;
+        }
+      | null;
+
+  if (
+    !body ||
+    typeof body.completed !==
+      "boolean"
+  ) {
     return NextResponse.json(
-      { error: "Urgent task not found." },
-      { status: 404 }
+      {
+        error:
+          "A valid completion status is required.",
+      },
+      {
+        status: 400,
+      }
     );
   }
 
-  /*
-   * 4. IF REOPENING, CHECK THE FEATURE STATUS
-   *
-   * Normal areas:
-   * Blue / Green → Being Prepared
-   *
-   * Infrastructure:
-   * Blue / Green → Laid / Installed
-   */
-  let shouldResetAreaStatus = false;
-
-  let rollbackStatus:
-    | "laid"
-    | "preparing"
-    | null = null;
-
-  if (!completed) {
-    const {
-      data: area,
-      error: areaError,
-    } = await supabaseServer
-      .from("site_areas")
-      .select("id, status, area_type")
-      .eq("id", existingTask.area_id)
+  const {
+    data:
+      existingTaskData,
+    error:
+      existingTaskError,
+  } =
+    await supabaseServer
+      .from("urgent_tasks")
+      .select(
+        "id, area_id, task_text, completed, raised_by_username, raised_by_phone, completion_sms_sent_at"
+      )
+      .eq(
+        "id",
+        cleanTaskId
+      )
       .maybeSingle();
 
-    if (areaError) {
-      console.error(
-        "Failed to retrieve site area:",
-        areaError
-      );
+  if (
+    existingTaskError
+  ) {
+    console.error(
+      "Failed to load urgent task before update:",
+      existingTaskError
+    );
 
-      return NextResponse.json(
-        {
-          error:
-            "The site's progress status could not be checked.",
-        },
-        { status: 500 }
-      );
-    }
-
-    if (!area) {
-      return NextResponse.json(
-        { error: "Site area not found." },
-        { status: 404 }
-      );
-    }
-
-    const isInfrastructure =
-      area.area_type === "fence" ||
-      area.area_type === "rubber_tracking" ||
-      area.area_type === "metal_tracking";
-
-    rollbackStatus = isInfrastructure
-      ? "laid"
-      : "preparing";
-
-    shouldResetAreaStatus =
-      area.status === "ready_for_inspection" ||
-      area.status === "completed";
+    return NextResponse.json(
+      {
+        error:
+          "The urgent task could not be checked.",
+      },
+      {
+        status: 500,
+      }
+    );
   }
 
-  /*
-   * 5. UPDATE TASK
-   */
-  const newCompletedAt = completed
-    ? new Date().toISOString()
-    : null;
+  if (
+    !existingTaskData
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          "Urgent task not found.",
+      },
+      {
+        status: 404,
+      }
+    );
+  }
 
+  const existingTask =
+    existingTaskData as ExistingTask;
+
+  const isNewCompletion =
+    !existingTask.completed &&
+    body.completed;
+
+  /*
+   * First save the operational task state.
+   * SMS failure must never prevent the site team
+   * from completing an urgent task.
+   */
   const {
-    data: updatedTask,
-    error: updateError,
-  } = await supabaseServer
-    .from("urgent_tasks")
-    .update({
-      completed,
-      completed_at: newCompletedAt,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", taskId)
-    .select("*")
-    .single();
+    data:
+      updatedTask,
+    error:
+      updateError,
+  } =
+    await supabaseServer
+      .from("urgent_tasks")
+      .update({
+        completed:
+          body.completed,
+        updated_at:
+          new Date().toISOString(),
+      })
+      .eq(
+        "id",
+        cleanTaskId
+      )
+      .select(
+        "id, area_id, task_text, completed, created_at, updated_at"
+      )
+      .single();
 
   if (updateError) {
     console.error(
@@ -183,161 +190,212 @@ export async function PATCH(
     );
 
     return NextResponse.json(
-      { error: "The urgent task could not be updated." },
-      { status: 500 }
+      {
+        error:
+          "The urgent task could not be updated.",
+      },
+      {
+        status: 500,
+      }
     );
   }
 
-  /*
-   * 6. IF REOPENED WHILE BLUE / GREEN,
-   *    ROLLBACK THE FEATURE STATUS
-   *
-   * Normal area:
-   * → preparing
-   *
-   * Infrastructure:
-   * → laid
-   */
+  let smsAttempted =
+    false;
+
+  let smsSent =
+    false;
+
+  let smsError:
+    string | null =
+    null;
+
   if (
-    shouldResetAreaStatus &&
-    rollbackStatus
+    isNewCompletion &&
+    existingTask
+      .raised_by_phone &&
+    !existingTask
+      .completion_sms_sent_at
   ) {
+    smsAttempted =
+      true;
+
     const {
-      error: statusError,
-    } = await supabaseServer
-      .from("site_areas")
-      .update({
-        status: rollbackStatus,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", existingTask.area_id);
+      data:
+        area,
+      error:
+        areaError,
+    } =
+      await supabaseServer
+        .from("site_areas")
+        .select(
+          "id, name"
+        )
+        .eq(
+          "id",
+          existingTask.area_id
+        )
+        .maybeSingle();
 
-    if (statusError) {
+    if (
+      areaError ||
+      !area
+    ) {
       console.error(
-        "Failed to reset site area after reopening task:",
-        statusError
+        "Urgent task completed but its area could not be loaded for SMS:",
+        areaError
       );
 
-      /*
-       * The urgent task update succeeded but the
-       * required site status rollback failed.
-       *
-       * Restore the task to its exact previous state
-       * so the database does not become inconsistent.
-       */
-      const {
-        error: restoreError,
-      } = await supabaseServer
-        .from("urgent_tasks")
-        .update({
-          completed: existingTask.completed,
-          completed_at: existingTask.completed_at,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", taskId);
+      smsError =
+        "The issue was resolved, but the SMS could not be prepared because the site area could not be loaded.";
+    } else {
+      const smsResult =
+        await sendUrgentTaskResolvedSms({
+          phoneNumber:
+            existingTask
+              .raised_by_phone,
+          areaName:
+            area.name,
+          taskText:
+            existingTask
+              .task_text,
+        });
 
-      if (restoreError) {
-        console.error(
-          "Failed to restore urgent task after area rollback failure:",
-          restoreError
-        );
-      }
+      smsSent =
+        smsResult.success;
 
-      return NextResponse.json(
-        {
+      smsError =
+        smsResult.success
+          ? null
+          : smsResult.error ??
+            "The completion SMS could not be sent.";
+
+      if (
+        smsResult.success
+      ) {
+        const {
           error:
-            "The urgent task could not be reopened because the area status could not be reset.",
-        },
-        { status: 500 }
-      );
+            smsStampError,
+        } =
+          await supabaseServer
+            .from(
+              "urgent_tasks"
+            )
+            .update({
+              completion_sms_sent_at:
+                new Date().toISOString(),
+            })
+            .eq(
+              "id",
+              cleanTaskId
+            )
+            .is(
+              "completion_sms_sent_at",
+              null
+            );
+
+        if (
+          smsStampError
+        ) {
+          /*
+           * The SMS itself has already gone out.
+           * Log this loudly because failure to stamp
+           * may permit a later duplicate if the task
+           * is reopened and completed again.
+           */
+          console.error(
+            "SMS sent but completion_sms_sent_at could not be recorded:",
+            smsStampError
+          );
+        }
+      }
     }
   }
 
-  /*
-   * 7. SUCCESS
-   */
   return NextResponse.json({
     success: true,
-    task: updatedTask,
-    areaStatusChanged: shouldResetAreaStatus,
-    areaStatus:
-      shouldResetAreaStatus
-        ? rollbackStatus
-        : null,
+    task:
+      updatedTask,
+    sms: {
+      attempted:
+        smsAttempted,
+      sent:
+        smsSent,
+      error:
+        smsError,
+    },
   });
 }
 
 /*
- * DELETE URGENT TASK
+ * DELETE
+ *
+ * Existing full-editor-only behaviour.
  */
 export async function DELETE(
   _request: Request,
   context: RouteContext
 ) {
-  /*
-   * 1. AUTHORISATION
-   */
-  const authorised = await hasValidEditorSession();
+  const authorised =
+    await hasValidEditorSession();
 
   if (!authorised) {
     return NextResponse.json(
-      { error: "Editing access is required." },
-      { status: 401 }
+      {
+        error:
+          "Editing access is required.",
+      },
+      {
+        status: 401,
+      }
     );
   }
 
-  const { taskId } = await context.params;
-
-  /*
-   * 2. MAKE SURE TASK EXISTS
-   */
   const {
-    data: existingTask,
-    error: lookupError,
-  } = await supabaseServer
-    .from("urgent_tasks")
-    .select("id")
-    .eq("id", taskId)
-    .maybeSingle();
+    taskId,
+  } =
+    await context.params;
 
-  if (lookupError) {
-    console.error(
-      "Failed to retrieve urgent task:",
-      lookupError
-    );
+  const cleanTaskId =
+    taskId?.trim();
 
+  if (!cleanTaskId) {
     return NextResponse.json(
-      { error: "The urgent task could not be checked." },
-      { status: 500 }
+      {
+        error:
+          "A valid urgent task is required.",
+      },
+      {
+        status: 400,
+      }
     );
   }
 
-  if (!existingTask) {
-    return NextResponse.json(
-      { error: "Urgent task not found." },
-      { status: 404 }
-    );
-  }
-
-  /*
-   * 3. DELETE TASK
-   */
   const {
-    error: deleteError,
-  } = await supabaseServer
-    .from("urgent_tasks")
-    .delete()
-    .eq("id", taskId);
+    error,
+  } =
+    await supabaseServer
+      .from("urgent_tasks")
+      .delete()
+      .eq(
+        "id",
+        cleanTaskId
+      );
 
-  if (deleteError) {
+  if (error) {
     console.error(
-      "Failed to delete urgent task:",
-      deleteError
+      "Failed to remove urgent task:",
+      error
     );
 
     return NextResponse.json(
-      { error: "The urgent task could not be removed." },
-      { status: 500 }
+      {
+        error:
+          "The urgent task could not be removed.",
+      },
+      {
+        status: 500,
+      }
     );
   }
 

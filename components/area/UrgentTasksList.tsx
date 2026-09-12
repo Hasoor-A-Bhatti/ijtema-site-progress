@@ -888,6 +888,11 @@ export default function UrgentTasksList({
           | {
               task?: UrgentTask;
               error?: string;
+              sms?: {
+                attempted?: boolean;
+                sent?: boolean;
+                error?: string | null;
+              };
             }
           | null;
 
@@ -915,6 +920,24 @@ export default function UrgentTasksList({
                   : currentTask
             )
         );
+      }
+
+      if (
+        nextCompleted &&
+        data?.sms?.attempted
+      ) {
+        if (
+          data.sms.sent
+        ) {
+          setError(
+            null
+          );
+        } else {
+          setError(
+            data.sms.error ??
+              "The task was completed, but its SMS notification could not be sent."
+          );
+        }
       }
     } catch (
       updateError
@@ -1037,7 +1060,7 @@ export default function UrgentTasksList({
           lajnaAccess.authorised && (
             <div className="flex items-center gap-2">
               <span className="rounded-full bg-pink-50 px-2.5 py-1 text-[11px] font-semibold text-pink-700">
-                Lajna Access
+                Lajna Access · SMS
               </span>
 
               <button
@@ -1057,7 +1080,7 @@ export default function UrgentTasksList({
           ansarAccess.authorised && (
             <div className="flex items-center gap-2">
               <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700">
-                Ansar Access
+                Ansar Access · SMS
               </span>
 
               <button
@@ -1167,7 +1190,7 @@ export default function UrgentTasksList({
                     </p>
 
                     <p className="mt-0.5 text-xs leading-5 text-pink-700">
-                      Sign in to raise urgent tasks for Lajna areas.
+                      Sign in to raise urgent tasks for Lajna areas. The registered phone will be notified when the issue is resolved.
                     </p>
                   </div>
 
@@ -1295,7 +1318,7 @@ export default function UrgentTasksList({
                     </p>
 
                     <p className="mt-0.5 text-xs leading-5 text-blue-700">
-                      Sign in to raise urgent tasks for Ansar areas.
+                      Sign in to raise urgent tasks for Ansar areas. The registered phone will be notified when the issue is resolved.
                     </p>
                   </div>
 

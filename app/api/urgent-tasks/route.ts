@@ -1,98 +1,35 @@
 import { NextResponse } from "next/server";
 
-import { hasAnsarTaskAccess } from "@/app/api/ansar-access/route";
+import { getAnsarTaskSession } from "@/app/api/ansar-access/route";
 import { getLajnaTaskSession } from "@/app/api/lajna-access/route";
 import { hasValidEditorSession } from "@/lib/auth/requireEditorSession";
+import {
+  sendUrgentTaskCreatedSms,
+} from "@/lib/sms/urgentTaskSms";
 import { supabaseServer } from "@/lib/supabaseServer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/*
- * We deliberately check the area on the
- * SERVER.
- *
- * The browser cannot simply pretend an
- * Ansar area is a Lajna area.
- */
-async function isLajnaArea(
-  areaId: string
-) {
-  const {
-    data,
-    error,
-  } =
-    await supabaseServer
-      .from("site_areas")
-      .select(
-        "id, name, area_type"
-      )
-      .eq(
-        "id",
-        areaId
-      )
-      .maybeSingle();
+type RestrictedGroup =
+  | "lajna"
+  | "ansar";
 
-  if (error) {
-    console.error(
-      "Failed to check Lajna area:",
-      error
-    );
-
-    return {
-      exists: false,
-      allowed: false,
-      error: true,
-    };
-  }
-
-  if (!data) {
-    return {
-      exists: false,
-      allowed: false,
-      error: false,
-    };
-  }
-
-  /*
-   * This automatically covers:
-   *
-   * Lajna marquees
-   * Lajna metal tracking
-   * Lajna rubber tracking
-   * Lajna fencing
-   * Lajna/Nasirat features
-   *
-   * provided their database name begins
-   * with "Lajna".
-   */
-  const allowed =
-    data.name
-      .trim()
-      .toLowerCase()
-      .startsWith(
-        "lajna"
-      );
-
-  return {
-    exists: true,
-    allowed,
-    error: false,
-  };
+interface AreaCheck {
+  exists: boolean;
+  name: string | null;
+  group: RestrictedGroup | null;
+  error: boolean;
 }
 
-
 /*
- * Ansar uses the same restricted urgent-task
- * access model as Lajna.
- *
- * We deliberately check the database area name
- * on the SERVER so a browser cannot pretend a
- * non-Ansar area is an Ansar area.
+ * One server-side lookup determines both whether
+ * the area exists and which restricted group,
+ * if any, is allowed to raise a task there.
  */
-async function isAnsarArea(
+async function getAreaCheck(
   areaId: string
-) {
+): Promise<AreaCheck> {
   const {
     data,
     error,
@@ -110,13 +47,14 @@ async function isAnsarArea(
 
   if (error) {
     console.error(
-      "Failed to check Ansar area:",
+      "Failed to check urgent-task area:",
       error
     );
 
     return {
       exists: false,
-      allowed: false,
+      name: null,
+      group: null,
       error: true,
     };
   }
@@ -124,28 +62,34 @@ async function isAnsarArea(
   if (!data) {
     return {
       exists: false,
-      allowed: false,
+      name: null,
+      group: null,
       error: false,
     };
   }
 
-  /*
-   * This automatically covers any Ansar
-   * marquee / site area, metal tracking,
-   * rubber tracking or fencing whose database
-   * name begins with "Ansar".
-   */
-  const allowed =
+  const normalizedName =
     data.name
       .trim()
-      .toLowerCase()
-      .startsWith(
-        "ansar"
-      );
+      .toLowerCase();
+
+  const group:
+    RestrictedGroup | null =
+    normalizedName.startsWith(
+      "lajna"
+    )
+      ? "lajna"
+      : normalizedName.startsWith(
+            "ansar"
+          )
+        ? "ansar"
+        : null;
 
   return {
     exists: true,
-    allowed,
+    name:
+      data.name,
+    group,
     error: false,
   };
 }
@@ -153,7 +97,11 @@ async function isAnsarArea(
 /*
  * GET
  *
- * Remains viewable exactly as before.
+ * Public/view-only loading remains available.
+ *
+ * IMPORTANT:
+ * Phone numbers and reporter identity are not
+ * selected here, so they never leak to browsers.
  */
 export async function GET(
   request: Request
@@ -186,7 +134,9 @@ export async function GET(
   } =
     await supabaseServer
       .from("urgent_tasks")
-      .select("*")
+      .select(
+        "id, area_id, task_text, completed, created_at, updated_at"
+      )
       .eq(
         "area_id",
         areaId
@@ -223,7 +173,8 @@ export async function GET(
 
   return NextResponse.json({
     success: true,
-    tasks: data ?? [],
+    tasks:
+      data ?? [],
   });
 }
 
@@ -232,14 +183,14 @@ export async function GET(
  *
  * AUTHORISED WHEN:
  *
- * 1. Existing full editor session
+ * 1. Full editor session
  * OR
- * 2. Lajna task session AND area is Lajna
+ * 2. Lajna task session on a Lajna area
  * OR
- * 3. Ansar task session AND area is Ansar
+ * 3. Ansar task session on an Ansar area
  *
- * Full-admin behaviour therefore remains
- * completely unchanged.
+ * Restricted sessions also attach the registered
+ * account phone to the task, entirely server-side.
  */
 export async function POST(
   request: Request
@@ -247,7 +198,9 @@ export async function POST(
   const body =
     (await request
       .json()
-      .catch(() => null)) as
+      .catch(
+        () => null
+      )) as
       | {
           areaId?: unknown;
           taskText?: unknown;
@@ -305,188 +258,114 @@ export async function POST(
     );
   }
 
-  /*
-   * Existing full site editor retains
-   * permission everywhere.
-   */
+  const areaCheck =
+    await getAreaCheck(
+      areaId
+    );
+
+  if (
+    areaCheck.error
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          "The selected site area could not be checked.",
+      },
+      {
+        status: 500,
+      }
+    );
+  }
+
+  if (
+    !areaCheck.exists
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          "Site area not found.",
+      },
+      {
+        status: 404,
+      }
+    );
+  }
+
   const fullEditor =
     await hasValidEditorSession();
 
+  let raisedByUsername:
+    string | null = null;
+
+  let raisedByPhone:
+    string | null = null;
+
   if (!fullEditor) {
-    /*
-     * No full editor session:
-     * check the two narrow task-access sessions.
-     *
-     * Neither session grants normal editor access.
-     */
     const [
       lajnaSession,
       ansarSession,
     ] =
       await Promise.all([
         getLajnaTaskSession(),
-        hasAnsarTaskAccess(),
+        getAnsarTaskSession(),
       ]);
 
     if (
-      !lajnaSession &&
-      !ansarSession
+      areaCheck.group ===
+        "lajna"
     ) {
+      if (!lajnaSession) {
+        return NextResponse.json(
+          {
+            error:
+              "Lajna task access is required to raise urgent tasks within Lajna areas.",
+          },
+          {
+            status: 401,
+          }
+        );
+      }
+
+      raisedByUsername =
+        lajnaSession.username;
+
+      raisedByPhone =
+        lajnaSession.phone;
+    } else if (
+      areaCheck.group ===
+        "ansar"
+    ) {
+      if (!ansarSession) {
+        return NextResponse.json(
+          {
+            error:
+              "Ansar task access is required to raise urgent tasks within Ansar areas.",
+          },
+          {
+            status: 401,
+          }
+        );
+      }
+
+      raisedByUsername =
+        ansarSession.username;
+
+      raisedByPhone =
+        ansarSession.phone;
+    } else {
+      /*
+       * Narrow sessions do not grant access
+       * outside their own areas.
+       */
       return NextResponse.json(
         {
           error:
-            "Editing access, Lajna task access or Ansar task access is required.",
+            "Editing access is required for this site area.",
         },
         {
-          status: 401,
+          status: 403,
         }
       );
-    }
-
-    /*
-     * A Lajna session is valid only for a
-     * Lajna area.
-     */
-    if (lajnaSession) {
-      const lajnaAreaCheck =
-        await isLajnaArea(
-          areaId
-        );
-
-      if (
-        lajnaAreaCheck.error
-      ) {
-        return NextResponse.json(
-          {
-            error:
-              "The selected site area could not be checked.",
-          },
-          {
-            status: 500,
-          }
-        );
-      }
-
-      if (
-        !lajnaAreaCheck.exists
-      ) {
-        return NextResponse.json(
-          {
-            error:
-              "Site area not found.",
-          },
-          {
-            status: 404,
-          }
-        );
-      }
-
-      if (
-        lajnaAreaCheck.allowed
-      ) {
-        /*
-         * Authorised through restricted
-         * Lajna task access.
-         */
-      } else if (
-        !ansarSession
-      ) {
-        return NextResponse.json(
-          {
-            error:
-              "Lajna task access can only raise urgent tasks within Lajna areas.",
-          },
-          {
-            status: 403,
-          }
-        );
-      }
-    }
-
-    /*
-     * An Ansar session is valid only for an
-     * Ansar area.
-     *
-     * If both narrow sessions happen to exist,
-     * either matching area is accepted.
-     */
-    if (ansarSession) {
-      const ansarAreaCheck =
-        await isAnsarArea(
-          areaId
-        );
-
-      if (
-        ansarAreaCheck.error
-      ) {
-        return NextResponse.json(
-          {
-            error:
-              "The selected site area could not be checked.",
-          },
-          {
-            status: 500,
-          }
-        );
-      }
-
-      if (
-        !ansarAreaCheck.exists
-      ) {
-        return NextResponse.json(
-          {
-            error:
-              "Site area not found.",
-          },
-          {
-            status: 404,
-          }
-        );
-      }
-
-      if (
-        ansarAreaCheck.allowed
-      ) {
-        /*
-         * Authorised through restricted
-         * Ansar task access.
-         */
-      } else if (
-        !lajnaSession
-      ) {
-        return NextResponse.json(
-          {
-            error:
-              "Ansar task access can only raise urgent tasks within Ansar areas.",
-          },
-          {
-            status: 403,
-          }
-        );
-      } else {
-        /*
-         * Both narrow sessions exist. Make sure
-         * the area matched at least one of them.
-         */
-        const lajnaAreaCheck =
-          await isLajnaArea(
-            areaId
-          );
-
-        if (
-          !lajnaAreaCheck.allowed
-        ) {
-          return NextResponse.json(
-            {
-              error:
-                "Restricted task access can only raise urgent tasks within the matching Lajna or Ansar areas.",
-            },
-            {
-              status: 403,
-            }
-          );
-        }
-      }
     }
   }
 
@@ -503,8 +382,16 @@ export async function POST(
           taskText,
         completed:
           false,
+        raised_by_username:
+          raisedByUsername,
+        raised_by_phone:
+          raisedByPhone,
+        completion_sms_sent_at:
+          null,
       })
-      .select("*")
+      .select(
+        "id, area_id, task_text, completed, created_at, updated_at"
+      )
       .single();
 
   if (error) {
@@ -524,8 +411,79 @@ export async function POST(
     );
   }
 
+  /*
+   * Notify the site/admin phone only when the
+   * task was raised through restricted Lajna /
+   * Ansar access.
+   *
+   * Full editor-created tasks deliberately do
+   * not trigger this alert.
+   */
+  let adminSmsAttempted =
+    false;
+
+  let adminSmsSent =
+    false;
+
+  let adminSmsError:
+    string | null =
+    null;
+
+  if (
+    raisedByUsername &&
+    raisedByPhone
+  ) {
+    const adminPhone =
+      process.env
+        .IJTEMA_ADMIN_ALERT_PHONE;
+
+    if (
+      adminPhone
+    ) {
+      adminSmsAttempted =
+        true;
+
+      const smsResult =
+        await sendUrgentTaskCreatedSms({
+          phoneNumber:
+            adminPhone,
+          areaName:
+            areaCheck.name ??
+            "Site area",
+          taskText,
+          raisedBy:
+            raisedByUsername,
+        });
+
+      adminSmsSent =
+        smsResult.success;
+
+      adminSmsError =
+        smsResult.success
+          ? null
+          : smsResult.error ??
+            "The site alert SMS could not be sent.";
+    } else {
+      console.warn(
+        "IJTEMA_ADMIN_ALERT_PHONE is not configured, so new urgent-task SMS alerts are disabled."
+      );
+    }
+  }
+
   return NextResponse.json({
     success: true,
     task: data,
+    completionSmsEnabled:
+      Boolean(
+        raisedByPhone
+      ),
+    adminSms: {
+      attempted:
+        adminSmsAttempted,
+      sent:
+        adminSmsSent,
+      error:
+        adminSmsError,
+    },
   });
 }
