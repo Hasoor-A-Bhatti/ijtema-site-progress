@@ -1,8 +1,10 @@
 "use client";
 
 import {
+  FormEvent,
   useCallback,
   useEffect,
+  useMemo,
   useState,
 } from "react";
 
@@ -27,6 +29,80 @@ interface RestrictedTaskAccessState {
   username: string | null;
 }
 
+interface SmsResult {
+  attempted?: boolean;
+  sent?: boolean;
+  error?: string | null;
+}
+
+type AccessGroup =
+  | "lajna"
+  | "ansar";
+
+function formatTaskDate(
+  value?: string
+) {
+  if (!value) {
+    return null;
+  }
+
+  const date =
+    new Date(value);
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return null;
+  }
+
+  return new Intl.DateTimeFormat(
+    "en-GB",
+    {
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone:
+        "Europe/London",
+    }
+  ).format(date);
+}
+
+function StatusIcon({
+  completed,
+}: {
+  completed: boolean;
+}) {
+  if (completed) {
+    return (
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+        <svg
+          viewBox="0 0 20 20"
+          fill="none"
+          className="h-4 w-4"
+          aria-hidden="true"
+        >
+          <path
+            d="M5 10.2 8.2 13.4 15 6.6"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </span>
+    );
+  }
+
+  return (
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-700">
+      <span className="h-2.5 w-2.5 rounded-full bg-red-600" />
+    </span>
+  );
+}
+
 export default function UrgentTasksList({
   areaId,
   areaName,
@@ -40,9 +116,9 @@ export default function UrgentTasksList({
     tasks,
     setTasks,
   ] =
-    useState<
-      UrgentTask[]
-    >([]);
+    useState<UrgentTask[]>(
+      []
+    );
 
   const [
     loading,
@@ -70,12 +146,20 @@ export default function UrgentTasksList({
       string | null
     >(null);
 
-  /*
-   * Restricted Lajna access state.
-   *
-   * This NEVER changes the existing
-   * EditorAccessProvider / canEdit value.
-   */
+  const [
+    notice,
+    setNotice,
+  ] =
+    useState<
+      string | null
+    >(null);
+
+  const [
+    showResolved,
+    setShowResolved,
+  ] =
+    useState(false);
+
   const [
     lajnaAccess,
     setLajnaAccess,
@@ -101,14 +185,14 @@ export default function UrgentTasksList({
     useState(false);
 
   const [
-    showLajnaLogin,
-    setShowLajnaLogin,
+    checkingAnsar,
+    setCheckingAnsar,
   ] =
     useState(false);
 
   const [
-    checkingAnsar,
-    setCheckingAnsar,
+    showLajnaLogin,
+    setShowLajnaLogin,
   ] =
     useState(false);
 
@@ -144,61 +228,74 @@ export default function UrgentTasksList({
       string | null
     >(null);
 
-  /*
-   * UI check only.
-   *
-   * Security is NOT based on this.
-   * The API independently checks the
-   * database area name before allowing
-   * the task to be inserted.
-   */
+  const normalizedAreaName =
+    areaName
+      .trim()
+      .toLowerCase();
+
   const isLajnaArea =
-    areaName
-      .trim()
-      .toLowerCase()
-      .startsWith(
-        "lajna"
-      );
-
-  const isAnsarArea =
-    areaName
-      .trim()
-      .toLowerCase()
-      .startsWith(
-        "ansar"
-      );
-
-  /*
-   * Full site editors can already edit
-   * everything.
-   *
-   * Lajna users can add only on Lajna
-   * areas.
-   */
-  const canAddTask =
-    canEdit ||
-    (
-      isLajnaArea &&
-      lajnaAccess.authorised
-    ) ||
-    (
-      isAnsarArea &&
-      ansarAccess.authorised
+    normalizedAreaName.startsWith(
+      "lajna"
     );
 
-  /*
-   * LOAD TASKS
-   */
+  const isAnsarArea =
+    normalizedAreaName.startsWith(
+      "ansar"
+    );
+
+  const restrictedGroup:
+    AccessGroup | null =
+    isLajnaArea
+      ? "lajna"
+      : isAnsarArea
+        ? "ansar"
+        : null;
+
+  const activeRestrictedAccess =
+    restrictedGroup ===
+    "lajna"
+      ? lajnaAccess
+      : restrictedGroup ===
+          "ansar"
+        ? ansarAccess
+        : null;
+
+  const canAddTask =
+    canEdit ||
+    Boolean(
+      activeRestrictedAccess
+        ?.authorised
+    );
+
+  const outstandingTasks =
+    useMemo(
+      () =>
+        tasks.filter(
+          (task) =>
+            !task.completed
+        ),
+      [
+        tasks,
+      ]
+    );
+
+  const resolvedTasks =
+    useMemo(
+      () =>
+        tasks.filter(
+          (task) =>
+            task.completed
+        ),
+      [
+        tasks,
+      ]
+    );
+
   const loadTasks =
     useCallback(
       async () => {
-        setLoading(
-          true
-        );
-
-        setError(
-          null
-        );
+        setLoading(true);
+        setError(null);
 
         try {
           const response =
@@ -253,32 +350,32 @@ export default function UrgentTasksList({
               : "Urgent tasks could not be loaded."
           );
         } finally {
-          setLoading(
-            false
-          );
+          setLoading(false);
         }
       },
-      [areaId]
+      [
+        areaId,
+      ]
     );
 
   useEffect(() => {
-  const timeout = window.setTimeout(() => {
-    void loadTasks();
-  }, 0);
+    const timeout =
+      window.setTimeout(
+        () => {
+          void loadTasks();
+        },
+        0
+      );
 
-  return () => {
-    window.clearTimeout(timeout);
-  };
-}, [loadTasks]);
+    return () => {
+      window.clearTimeout(
+        timeout
+      );
+    };
+  }, [
+    loadTasks,
+  ]);
 
-  /*
-   * CHECK WHETHER THIS BROWSER ALREADY
-   * HAS A LAJNA TASK SESSION.
-   *
-   * Only necessary while looking at a
-   * Lajna area and when the user is not
-   * already a full editor.
-   */
   useEffect(() => {
     if (
       canEdit ||
@@ -317,13 +414,12 @@ export default function UrgentTasksList({
               }
             | null;
 
-        if (
-          !cancelled
-        ) {
+        if (!cancelled) {
           setLajnaAccess({
             authorised:
               Boolean(
-                data?.authorised
+                response.ok &&
+                  data?.authorised
               ),
             username:
               data?.username ??
@@ -331,20 +427,14 @@ export default function UrgentTasksList({
           });
         }
       } catch {
-        if (
-          !cancelled
-        ) {
+        if (!cancelled) {
           setLajnaAccess({
-            authorised:
-              false,
-            username:
-              null,
+            authorised: false,
+            username: null,
           });
         }
       } finally {
-        if (
-          !cancelled
-        ) {
+        if (!cancelled) {
           setCheckingLajna(
             false
           );
@@ -363,14 +453,6 @@ export default function UrgentTasksList({
     isLajnaArea,
   ]);
 
-  /*
-   * CHECK WHETHER THIS BROWSER ALREADY
-   * HAS AN ANSAR TASK SESSION.
-   *
-   * Only necessary while looking at an
-   * Ansar area and when the user is not
-   * already a full editor.
-   */
   useEffect(() => {
     if (
       canEdit ||
@@ -409,13 +491,12 @@ export default function UrgentTasksList({
               }
             | null;
 
-        if (
-          !cancelled
-        ) {
+        if (!cancelled) {
           setAnsarAccess({
             authorised:
               Boolean(
-                data?.authorised
+                response.ok &&
+                  data?.authorised
               ),
             username:
               data?.username ??
@@ -423,20 +504,14 @@ export default function UrgentTasksList({
           });
         }
       } catch {
-        if (
-          !cancelled
-        ) {
+        if (!cancelled) {
           setAnsarAccess({
-            authorised:
-              false,
-            username:
-              null,
+            authorised: false,
+            username: null,
           });
         }
       } finally {
-        if (
-          !cancelled
-        ) {
+        if (!cancelled) {
           setCheckingAnsar(
             false
           );
@@ -455,11 +530,15 @@ export default function UrgentTasksList({
     isAnsarArea,
   ]);
 
-  /*
-   * LAJNA LOGIN
-   */
-  async function signInLajna(
-    event: React.FormEvent
+  function resetLoginForm() {
+    setUsername("");
+    setPassword("");
+    setLoginError(null);
+  }
+
+  async function signInRestricted(
+    event: FormEvent<HTMLFormElement>,
+    group: AccessGroup
   ) {
     event.preventDefault();
 
@@ -470,37 +549,30 @@ export default function UrgentTasksList({
       setLoginError(
         "Enter your username and password."
       );
-
       return;
     }
 
-    setSigningIn(
-      true
-    );
-
-    setLoginError(
-      null
-    );
+    setSigningIn(true);
+    setLoginError(null);
 
     try {
       const response =
         await fetch(
-          "/api/lajna-access",
+          group === "lajna"
+            ? "/api/lajna-access"
+            : "/api/ansar-access",
           {
-            method:
-              "POST",
+            method: "POST",
             headers: {
               "Content-Type":
                 "application/json",
             },
             body:
-              JSON.stringify(
-                {
-                  username:
-                    username.trim(),
-                  password,
-                }
-              ),
+              JSON.stringify({
+                username:
+                  username.trim(),
+                password,
+              }),
           }
         );
 
@@ -528,154 +600,39 @@ export default function UrgentTasksList({
         );
       }
 
-      setLajnaAccess({
-        authorised:
-          true,
+      const access = {
+        authorised: true,
         username:
           data.username ??
           username.trim(),
-      });
-
-      setPassword(
-        ""
-      );
-
-      setShowLajnaLogin(
-        false
-      );
-    } catch (
-      signInError
-    ) {
-      setLoginError(
-        signInError instanceof
-          Error
-          ? signInError.message
-          : "Lajna task access could not be enabled."
-      );
-    } finally {
-      setSigningIn(
-        false
-      );
-    }
-  }
-
-  /*
-   * LAJNA LOGOUT
-   */
-  async function signOutLajna() {
-    try {
-      await fetch(
-        "/api/lajna-access",
-        {
-          method:
-            "DELETE",
-        }
-      );
-    } finally {
-      setLajnaAccess({
-        authorised:
-          false,
-        username:
-          null,
-      });
-
-      setUsername(
-        ""
-      );
-
-      setPassword(
-        ""
-      );
-    }
-  }
-
-  /*
-   * ANSAR LOGIN
-   */
-  async function signInAnsar(
-    event: React.FormEvent
-  ) {
-    event.preventDefault();
-
-    if (
-      !username.trim() ||
-      !password
-    ) {
-      setLoginError(
-        "Enter your username and password."
-      );
-
-      return;
-    }
-
-    setSigningIn(
-      true
-    );
-
-    setLoginError(
-      null
-    );
-
-    try {
-      const response =
-        await fetch(
-          "/api/ansar-access",
-          {
-            method:
-              "POST",
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-            body:
-              JSON.stringify(
-                {
-                  username:
-                    username.trim(),
-                  password,
-                }
-              ),
-          }
-        );
-
-      const data =
-        (await response
-          .json()
-          .catch(
-            () => null
-          )) as
-          | {
-              success?: boolean;
-              authorised?: boolean;
-              username?: string | null;
-              error?: string;
-            }
-          | null;
+      };
 
       if (
-        !response.ok ||
-        !data?.authorised
+        group === "lajna"
       ) {
-        throw new Error(
-          data?.error ??
-            "The username or password was not accepted."
+        setLajnaAccess(
+          access
+        );
+        setShowLajnaLogin(
+          false
+        );
+      } else {
+        setAnsarAccess(
+          access
+        );
+        setShowAnsarLogin(
+          false
         );
       }
 
-      setAnsarAccess({
-        authorised:
-          true,
-        username:
-          data.username ??
-          username.trim(),
-      });
-
-      setPassword(
-        ""
-      );
-
-      setShowAnsarLogin(
-        false
+      setPassword("");
+      setNotice(
+        `${
+          group ===
+          "lajna"
+            ? "Lajna"
+            : "Ansar"
+        } urgent-task access enabled.`
       );
     } catch (
       signInError
@@ -684,48 +641,46 @@ export default function UrgentTasksList({
         signInError instanceof
           Error
           ? signInError.message
-          : "Ansar task access could not be enabled."
+          : "Task access could not be enabled."
       );
     } finally {
-      setSigningIn(
-        false
-      );
+      setSigningIn(false);
     }
   }
 
-  /*
-   * ANSAR LOGOUT
-   */
-  async function signOutAnsar() {
+  async function signOutRestricted(
+    group: AccessGroup
+  ) {
     try {
       await fetch(
-        "/api/ansar-access",
+        group === "lajna"
+          ? "/api/lajna-access"
+          : "/api/ansar-access",
         {
           method:
             "DELETE",
         }
       );
     } finally {
-      setAnsarAccess({
-        authorised:
-          false,
-        username:
-          null,
-      });
+      if (
+        group === "lajna"
+      ) {
+        setLajnaAccess({
+          authorised: false,
+          username: null,
+        });
+      } else {
+        setAnsarAccess({
+          authorised: false,
+          username: null,
+        });
+      }
 
-      setUsername(
-        ""
-      );
-
-      setPassword(
-        ""
-      );
+      resetLoginForm();
+      setNotice(null);
     }
   }
 
-  /*
-   * ADD URGENT TASK
-   */
   async function addTask() {
     const taskText =
       newTask.trim();
@@ -737,32 +692,25 @@ export default function UrgentTasksList({
       return;
     }
 
-    setAdding(
-      true
-    );
-
-    setError(
-      null
-    );
+    setAdding(true);
+    setError(null);
+    setNotice(null);
 
     try {
       const response =
         await fetch(
           "/api/urgent-tasks",
           {
-            method:
-              "POST",
+            method: "POST",
             headers: {
               "Content-Type":
                 "application/json",
             },
             body:
-              JSON.stringify(
-                {
-                  areaId,
-                  taskText,
-                }
-              ),
+              JSON.stringify({
+                areaId,
+                taskText,
+              }),
           }
         );
 
@@ -776,6 +724,7 @@ export default function UrgentTasksList({
               success?: boolean;
               task?: UrgentTask;
               error?: string;
+              adminSms?: SmsResult;
             }
           | null;
 
@@ -796,9 +745,36 @@ export default function UrgentTasksList({
         ]
       );
 
-      setNewTask(
-        ""
-      );
+      setNewTask("");
+
+      if (
+        !canEdit &&
+        data.adminSms
+          ?.attempted
+      ) {
+        if (
+          data.adminSms
+            .sent
+        ) {
+          setNotice(
+            "Urgent task raised. Site Ops has been notified by SMS."
+          );
+        } else {
+          setNotice(
+            "Urgent task raised successfully."
+          );
+
+          setError(
+            data.adminSms
+              .error ??
+              "The task was raised, but the Site Ops SMS could not be sent."
+          );
+        }
+      } else {
+        setNotice(
+          "Urgent task added."
+        );
+      }
     } catch (
       addError
     ) {
@@ -814,20 +790,10 @@ export default function UrgentTasksList({
           : "The urgent task could not be added."
       );
     } finally {
-      setAdding(
-        false
-      );
+      setAdding(false);
     }
   }
 
-  /*
-   * EXISTING ADMIN-ONLY UPDATE
-   *
-   * Restricted Lajna / Ansar users cannot
-   * complete/reopen existing tasks. Their
-   * permission is specifically limited to
-   * RAISING urgent tasks.
-   */
   async function toggleTask(
     task: UrgentTask
   ) {
@@ -840,6 +806,9 @@ export default function UrgentTasksList({
 
     const previousTasks =
       tasks;
+
+    setError(null);
+    setNotice(null);
 
     setTasks(
       (current) =>
@@ -863,19 +832,16 @@ export default function UrgentTasksList({
             task.id
           )}`,
           {
-            method:
-              "PATCH",
+            method: "PATCH",
             headers: {
               "Content-Type":
                 "application/json",
             },
             body:
-              JSON.stringify(
-                {
-                  completed:
-                    nextCompleted,
-                }
-              ),
+              JSON.stringify({
+                completed:
+                  nextCompleted,
+              }),
           }
         );
 
@@ -888,11 +854,7 @@ export default function UrgentTasksList({
           | {
               task?: UrgentTask;
               error?: string;
-              sms?: {
-                attempted?: boolean;
-                sent?: boolean;
-                error?: string | null;
-              };
+              sms?: SmsResult;
             }
           | null;
 
@@ -923,21 +885,37 @@ export default function UrgentTasksList({
       }
 
       if (
-        nextCompleted &&
-        data?.sms?.attempted
+        nextCompleted
       ) {
         if (
-          data.sms.sent
+          data?.sms
+            ?.attempted
         ) {
-          setError(
-            null
-          );
+          if (
+            data.sms.sent
+          ) {
+            setNotice(
+              "Task resolved. The reporter has been notified by SMS."
+            );
+          } else {
+            setNotice(
+              "Task resolved."
+            );
+
+            setError(
+              data.sms.error ??
+                "The task was resolved, but its SMS notification could not be sent."
+            );
+          }
         } else {
-          setError(
-            data.sms.error ??
-              "The task was completed, but its SMS notification could not be sent."
+          setNotice(
+            "Task resolved."
           );
         }
+      } else {
+        setNotice(
+          "Task reopened."
+        );
       }
     } catch (
       updateError
@@ -955,9 +933,6 @@ export default function UrgentTasksList({
     }
   }
 
-  /*
-   * EXISTING ADMIN-ONLY DELETE
-   */
   async function removeTask(
     task: UrgentTask
   ) {
@@ -976,6 +951,9 @@ export default function UrgentTasksList({
 
     const previousTasks =
       tasks;
+
+    setError(null);
+    setNotice(null);
 
     setTasks(
       (current) =>
@@ -1019,6 +997,10 @@ export default function UrgentTasksList({
             "The urgent task could not be removed."
         );
       }
+
+      setNotice(
+        "Urgent task removed."
+      );
     } catch (
       deleteError
     ) {
@@ -1035,60 +1017,146 @@ export default function UrgentTasksList({
     }
   }
 
-  const outstandingCount =
-    tasks.filter(
-      (task) =>
-        !task.completed
-    ).length;
+  const checkingRestrictedAccess =
+    (
+      isLajnaArea &&
+      checkingLajna
+    ) ||
+    (
+      isAnsarArea &&
+      checkingAnsar
+    );
+
+  const restrictedAccessAuthorised =
+    Boolean(
+      activeRestrictedAccess
+        ?.authorised
+    );
+
+  const accessLabel =
+    restrictedGroup ===
+    "lajna"
+      ? "Lajna"
+      : restrictedGroup ===
+          "ansar"
+        ? "Ansar"
+        : null;
+
+  const accent =
+    restrictedGroup ===
+    "lajna"
+      ? {
+          border:
+            "border-pink-200",
+          soft:
+            "bg-pink-50",
+          text:
+            "text-pink-800",
+          button:
+            "bg-pink-600 hover:bg-pink-700",
+          ring:
+            "focus:border-pink-400 focus:ring-pink-100",
+        }
+      : {
+          border:
+            "border-blue-200",
+          soft:
+            "bg-blue-50",
+          text:
+            "text-blue-800",
+          button:
+            "bg-blue-600 hover:bg-blue-700",
+          ring:
+            "focus:border-blue-400 focus:ring-blue-100",
+        };
 
   return (
-    <section className="mt-5">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-semibold text-slate-900">
-            Urgent Tasks
-          </h3>
+    <section className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      {/* HEADER */}
+      <div className="border-b border-slate-200 bg-slate-50/80 px-4 py-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-700">
+                <svg
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  className="h-4 w-4"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M10 2.8 17 15H3L10 2.8Z"
+                    stroke="currentColor"
+                    strokeWidth="1.7"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M10 7v3.8M10 13.3v.1"
+                    stroke="currentColor"
+                    strokeWidth="1.7"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </span>
 
-          <p className="mt-0.5 text-xs text-slate-500">
-            {outstandingCount}{" "}
-            outstanding
-          </p>
+              <div className="min-w-0">
+                <h3 className="text-sm font-bold text-slate-950">
+                  Urgent Tasks
+                </h3>
+
+                <p className="mt-0.5 truncate text-xs text-slate-500">
+                  {areaName}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div
+            className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ${
+              outstandingTasks.length >
+              0
+                ? "bg-red-100 text-red-700"
+                : "bg-emerald-100 text-emerald-700"
+            }`}
+          >
+            {outstandingTasks.length >
+            0
+              ? `${outstandingTasks.length} open`
+              : "All clear"}
+          </div>
         </div>
 
         {!canEdit &&
-          isLajnaArea &&
-          lajnaAccess.authorised && (
-            <div className="flex items-center gap-2">
-              <span className="rounded-full bg-pink-50 px-2.5 py-1 text-[11px] font-semibold text-pink-700">
-                Lajna Access · SMS
-              </span>
+          restrictedAccessAuthorised &&
+          accessLabel && (
+            <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+
+                  <p className="truncate text-xs font-semibold text-slate-800">
+                    {accessLabel} task access active
+                  </p>
+                </div>
+
+                <p className="mt-0.5 truncate pl-4 text-[11px] text-slate-500">
+                  {activeRestrictedAccess
+                    ?.username ??
+                    "Restricted user"}{" "}
+                  · SMS notifications enabled
+                </p>
+              </div>
 
               <button
                 type="button"
                 onClick={() =>
-                  void signOutLajna()
+                  restrictedGroup
+                    ? void signOutRestricted(
+                        restrictedGroup
+                      )
+                    : undefined
                 }
-                className="text-[11px] font-semibold text-slate-400 transition hover:text-slate-700"
-              >
-                Log out
-              </button>
-            </div>
-          )}
-
-        {!canEdit &&
-          isAnsarArea &&
-          ansarAccess.authorised && (
-            <div className="flex items-center gap-2">
-              <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700">
-                Ansar Access · SMS
-              </span>
-
-              <button
-                type="button"
-                onClick={() =>
-                  void signOutAnsar()
-                }
-                className="text-[11px] font-semibold text-slate-400 transition hover:text-slate-700"
+                className="shrink-0 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
               >
                 Log out
               </button>
@@ -1096,407 +1164,595 @@ export default function UrgentTasksList({
           )}
       </div>
 
-      {error && (
-        <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-medium text-red-700">
-          {error}
-        </div>
-      )}
-
-      {/* ADD TASK */}
-      {canAddTask && (
-        <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <textarea
-            value={
-              newTask
-            }
-            onChange={(
-              event
-            ) =>
-              setNewTask(
-                event.target
-                  .value
-              )
-            }
-            maxLength={
-              500
-            }
-            rows={
-              3
-            }
-            placeholder="Describe the urgent issue…"
-            className="w-full resize-none rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
-          />
-
-          <div className="mt-2 flex items-center justify-between gap-3">
-            <span className="text-[11px] text-slate-400">
-              {
-                newTask.length
-              }
-              /500
-            </span>
-
-            <button
-              type="button"
-              disabled={
-                adding ||
-                !newTask.trim()
-              }
-              onClick={() =>
-                void addTask()
-              }
-              className="rounded-xl bg-red-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+      <div className="p-4">
+        {/* FEEDBACK */}
+        {notice && (
+          <div className="mb-3 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs font-medium text-emerald-800">
+            <svg
+              viewBox="0 0 20 20"
+              fill="none"
+              className="mt-0.5 h-4 w-4 shrink-0"
+              aria-hidden="true"
             >
-              {adding
-                ? "Adding…"
-                : "Add Urgent Task"}
-            </button>
-          </div>
-        </div>
-      )}
+              <path
+                d="M5 10.2 8.2 13.4 15 6.6"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
 
-      {/* LAJNA LOGIN */}
-      {!canEdit &&
-        isLajnaArea &&
-        !lajnaAccess.authorised &&
-        !checkingLajna && (
-          <div className="mt-3">
-            {!showLajnaLogin ? (
+            <span>
+              {notice}
+            </span>
+          </div>
+        )}
+
+        {error && (
+          <div className="mb-3 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-medium text-red-700">
+            <svg
+              viewBox="0 0 20 20"
+              fill="none"
+              className="mt-0.5 h-4 w-4 shrink-0"
+              aria-hidden="true"
+            >
+              <path
+                d="M10 3.3 17 15.5H3L10 3.3Z"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M10 7.2v3.5M10 13.1v.1"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                strokeLinecap="round"
+              />
+            </svg>
+
+            <span>
+              {error}
+            </span>
+          </div>
+        )}
+
+        {/* CREATE TASK */}
+        {canAddTask && (
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3.5">
+            <div className="mb-2.5">
+              <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
+                Raise an urgent task
+              </p>
+
+              {!canEdit &&
+                restrictedAccessAuthorised && (
+                  <p className="mt-1 text-xs leading-5 text-slate-500">
+                    Site Ops will be notified immediately. Your registered phone will receive an SMS when the issue is resolved.
+                  </p>
+                )}
+            </div>
+
+            <textarea
+              value={
+                newTask
+              }
+              onChange={(
+                event
+              ) => {
+                setNewTask(
+                  event.target.value
+                );
+
+                if (error) {
+                  setError(null);
+                }
+
+                if (notice) {
+                  setNotice(null);
+                }
+              }}
+              maxLength={
+                500
+              }
+              rows={
+                3
+              }
+              placeholder="Describe the issue clearly, including the exact location if useful…"
+              className="w-full resize-none rounded-xl border border-slate-300 bg-white px-3.5 py-3 text-sm font-medium leading-5 text-slate-950 outline-none transition placeholder:font-normal placeholder:text-slate-400 focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+            />
+
+            <div className="mt-2.5 flex items-center justify-between gap-3">
+              <span className="text-[11px] font-medium text-slate-400">
+                {
+                  newTask.length
+                }
+                /500
+              </span>
+
               <button
                 type="button"
-                onClick={() => {
-                  setShowLajnaLogin(
-                    true
-                  );
-
-                  setLoginError(
-                    null
-                  );
-                }}
-                className="w-full rounded-xl border border-pink-200 bg-pink-50 px-4 py-2.5 text-sm font-semibold text-pink-700 transition hover:bg-pink-100"
-              >
-                Lajna Task Access
-              </button>
-            ) : (
-              <form
-                onSubmit={
-                  signInLajna
+                disabled={
+                  adding ||
+                  !newTask.trim()
                 }
-                className="rounded-xl border border-pink-200 bg-pink-50 p-3"
+                onClick={() =>
+                  void addTask()
+                }
+                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 text-xs font-bold text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-pink-900">
-                      Lajna Task Access
-                    </p>
+                {adding && (
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                )}
 
-                    <p className="mt-0.5 text-xs leading-5 text-pink-700">
-                      Sign in to raise urgent tasks for Lajna areas. The registered phone will be notified when the issue is resolved.
-                    </p>
+                {adding
+                  ? "Raising task…"
+                  : "Raise urgent task"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* RESTRICTED LOGIN */}
+        {!canEdit &&
+          restrictedGroup &&
+          !restrictedAccessAuthorised &&
+          !checkingRestrictedAccess && (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3.5">
+              {(
+                restrictedGroup ===
+                  "lajna"
+                  ? !showLajnaLogin
+                  : !showAnsarLogin
+              ) ? (
+                <div>
+                  <div className="flex items-start gap-3">
+                    <span
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${accent.soft} ${accent.text}`}
+                    >
+                      <svg
+                        viewBox="0 0 20 20"
+                        fill="none"
+                        className="h-4.5 w-4.5"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M6.5 8V6.5a3.5 3.5 0 0 1 7 0V8M5.2 8h9.6v8H5.2V8Z"
+                          stroke="currentColor"
+                          strokeWidth="1.6"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </span>
+
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-slate-900">
+                        {accessLabel} Task Access
+                      </p>
+
+                      <p className="mt-1 text-xs leading-5 text-slate-500">
+                        Sign in to raise urgent tasks for this area. Site Ops is alerted immediately and your registered phone is notified when the issue is resolved.
+                      </p>
+                    </div>
                   </div>
 
                   <button
                     type="button"
                     onClick={() => {
-                      setShowLajnaLogin(
-                        false
-                      );
+                      resetLoginForm();
 
-                      setLoginError(
-                        null
-                      );
+                      if (
+                        restrictedGroup ===
+                        "lajna"
+                      ) {
+                        setShowLajnaLogin(
+                          true
+                        );
+                      } else {
+                        setShowAnsarLogin(
+                          true
+                        );
+                      }
                     }}
-                    className="text-lg leading-none text-pink-400 hover:text-pink-700"
-                    aria-label="Close Lajna login"
+                    className={`mt-3 h-10 w-full rounded-xl text-sm font-bold text-white transition ${accent.button}`}
                   >
-                    ×
+                    Sign in to raise a task
                   </button>
                 </div>
-
-                <div className="mt-3 grid gap-2">
-                  <input
-                    type="text"
-                    autoComplete="username"
-                    value={
-                      username
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      setUsername(
-                        event.target
-                          .value
-                      )
-                    }
-                    placeholder="Username"
-                    className="h-10 rounded-xl border border-pink-200 bg-white px-3 text-sm text-slate-950 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100"
-                  />
-
-                  <input
-                    type="password"
-                    autoComplete="current-password"
-                    value={
-                      password
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      setPassword(
-                        event.target
-                          .value
-                      )
-                    }
-                    placeholder="Password"
-                    className="h-10 rounded-xl border border-pink-200 bg-white px-3 text-sm text-slate-950 outline-none focus:border-pink-400 focus:ring-2 focus:ring-pink-100"
-                  />
-                </div>
-
-                {loginError && (
-                  <p className="mt-2 text-xs font-medium text-red-600">
-                    {
-                      loginError
-                    }
-                  </p>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={
-                    signingIn
+              ) : (
+                <form
+                  onSubmit={(
+                    event
+                  ) =>
+                    void signInRestricted(
+                      event,
+                      restrictedGroup
+                    )
                   }
-                  className="mt-3 h-10 w-full rounded-xl bg-pink-600 text-sm font-semibold text-white transition hover:bg-pink-700 disabled:opacity-50"
                 >
-                  {signingIn
-                    ? "Signing in…"
-                    : "Sign in"}
-                </button>
-              </form>
-            )}
-          </div>
-        )}
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-bold text-slate-900">
+                        {accessLabel} Task Access
+                      </p>
 
-      {checkingLajna &&
-        !canEdit &&
-        isLajnaArea && (
-          <p className="mt-3 text-xs text-slate-400">
-            Checking Lajna task access…
-          </p>
-        )}
+                      <p className="mt-1 text-xs text-slate-500">
+                        Enter your site task credentials.
+                      </p>
+                    </div>
 
-      {/* ANSAR LOGIN */}
-      {!canEdit &&
-        isAnsarArea &&
-        !ansarAccess.authorised &&
-        !checkingAnsar && (
-          <div className="mt-3">
-            {!showAnsarLogin ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setShowAnsarLogin(
-                    true
-                  );
+                    <button
+                      type="button"
+                      onClick={() => {
+                        resetLoginForm();
 
-                  setLoginError(
-                    null
-                  );
-                }}
-                className="w-full rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
-              >
-                Ansar Task Access
-              </button>
-            ) : (
-              <form
-                onSubmit={
-                  signInAnsar
-                }
-                className="rounded-xl border border-blue-200 bg-blue-50 p-3"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-blue-900">
-                      Ansar Task Access
-                    </p>
-
-                    <p className="mt-0.5 text-xs leading-5 text-blue-700">
-                      Sign in to raise urgent tasks for Ansar areas. The registered phone will be notified when the issue is resolved.
-                    </p>
+                        if (
+                          restrictedGroup ===
+                          "lajna"
+                        ) {
+                          setShowLajnaLogin(
+                            false
+                          );
+                        } else {
+                          setShowAnsarLogin(
+                            false
+                          );
+                        }
+                      }}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg text-lg text-slate-400 transition hover:bg-white hover:text-slate-700"
+                      aria-label={`Close ${accessLabel} login`}
+                    >
+                      ×
+                    </button>
                   </div>
 
+                  <div className="mt-3 grid gap-2">
+                    <input
+                      type="text"
+                      autoComplete="username"
+                      value={
+                        username
+                      }
+                      onChange={(
+                        event
+                      ) => {
+                        setUsername(
+                          event.target.value
+                        );
+                        setLoginError(
+                          null
+                        );
+                      }}
+                      placeholder="Username"
+                      className={`h-11 rounded-xl border bg-white px-3.5 text-sm font-medium text-slate-950 outline-none transition ${accent.border} ${accent.ring} focus:ring-2`}
+                    />
+
+                    <input
+                      type="password"
+                      autoComplete="current-password"
+                      value={
+                        password
+                      }
+                      onChange={(
+                        event
+                      ) => {
+                        setPassword(
+                          event.target.value
+                        );
+                        setLoginError(
+                          null
+                        );
+                      }}
+                      placeholder="Password"
+                      className={`h-11 rounded-xl border bg-white px-3.5 text-sm font-medium text-slate-950 outline-none transition ${accent.border} ${accent.ring} focus:ring-2`}
+                    />
+                  </div>
+
+                  {loginError && (
+                    <p className="mt-2 text-xs font-semibold text-red-600">
+                      {loginError}
+                    </p>
+                  )}
+
                   <button
-                    type="button"
-                    onClick={() => {
-                      setShowAnsarLogin(
-                        false
-                      );
-
-                      setLoginError(
-                        null
-                      );
-                    }}
-                    className="text-lg leading-none text-blue-400 hover:text-blue-700"
-                    aria-label="Close Ansar login"
+                    type="submit"
+                    disabled={
+                      signingIn
+                    }
+                    className={`mt-3 h-11 w-full rounded-xl text-sm font-bold text-white transition disabled:opacity-50 ${accent.button}`}
                   >
-                    ×
+                    {signingIn
+                      ? "Signing in…"
+                      : "Sign in"}
                   </button>
-                </div>
+                </form>
+              )}
+            </div>
+          )}
 
-                <div className="mt-3 grid gap-2">
-                  <input
-                    type="text"
-                    autoComplete="username"
-                    value={
-                      username
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      setUsername(
-                        event.target
-                          .value
-                      )
-                    }
-                    placeholder="Username"
-                    className="h-10 rounded-xl border border-blue-200 bg-white px-3 text-sm text-slate-950 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                  />
+        {checkingRestrictedAccess &&
+          !canEdit &&
+          restrictedGroup && (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs font-medium text-slate-500">
+              Checking {accessLabel} task access…
+            </div>
+          )}
 
-                  <input
-                    type="password"
-                    autoComplete="current-password"
-                    value={
-                      password
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      setPassword(
-                        event.target
-                          .value
-                      )
-                    }
-                    placeholder="Password"
-                    className="h-10 rounded-xl border border-blue-200 bg-white px-3 text-sm text-slate-950 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                  />
-                </div>
+        {/* OUTSTANDING TASKS */}
+        <div className="mt-4">
+          <div className="mb-2.5 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
+                Open issues
+              </p>
 
-                {loginError && (
-                  <p className="mt-2 text-xs font-medium text-red-600">
-                    {
-                      loginError
-                    }
-                  </p>
-                )}
+              <p className="mt-0.5 text-[11px] text-slate-400">
+                Issues that still require action
+              </p>
+            </div>
 
-                <button
-                  type="submit"
-                  disabled={
-                    signingIn
-                  }
-                  className="mt-3 h-10 w-full rounded-xl bg-blue-600 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {signingIn
-                    ? "Signing in…"
-                    : "Sign in"}
-                </button>
-              </form>
+            {outstandingTasks.length >
+              0 && (
+              <span className="rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-bold text-red-700">
+                {
+                  outstandingTasks.length
+                }
+              </span>
             )}
           </div>
-        )}
 
-      {checkingAnsar &&
-        !canEdit &&
-        isAnsarArea && (
-          <p className="mt-3 text-xs text-slate-400">
-            Checking Ansar task access…
-          </p>
-        )}
+          {loading ? (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-5 text-center text-xs font-medium text-slate-500">
+              Loading urgent tasks…
+            </div>
+          ) : outstandingTasks.length ===
+            0 ? (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-4">
+              <div className="flex items-center gap-3">
+                <StatusIcon
+                  completed
+                />
 
-      {/* TASK LIST */}
-      <div className="mt-3 space-y-2">
-        {loading ? (
-          <div className="rounded-xl border border-slate-200 bg-white px-3 py-4 text-center text-xs text-slate-500">
-            Loading urgent tasks…
-          </div>
-        ) : tasks.length ===
-          0 ? (
-          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-4 text-center text-xs text-slate-500">
-            No urgent tasks recorded.
-          </div>
-        ) : (
-          tasks.map(
-            (task) => (
-              <div
-                key={
-                  task.id
-                }
-                className={`flex items-start gap-3 rounded-xl border p-3 ${
-                  task.completed
-                    ? "border-slate-200 bg-slate-50"
-                    : "border-red-200 bg-red-50"
-                }`}
-              >
-                {canEdit ? (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      void toggleTask(
-                        task
-                      )
-                    }
-                    aria-label={
-                      task.completed
-                        ? "Reopen urgent task"
-                        : "Complete urgent task"
-                    }
-                    className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border text-[11px] font-bold ${
-                      task.completed
-                        ? "border-emerald-500 bg-emerald-500 text-white"
-                        : "border-red-300 bg-white text-transparent"
-                    }`}
-                  >
-                    ✓
-                  </button>
-                ) : (
-                  <span
-                    className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${
-                      task.completed
-                        ? "bg-emerald-500"
-                        : "bg-red-500"
-                    }`}
-                  />
-                )}
+                <div>
+                  <p className="text-sm font-bold text-emerald-900">
+                    No open urgent issues
+                  </p>
 
-                <div className="min-w-0 flex-1">
-                  <p
-                    className={`text-sm leading-5 ${
-                      task.completed
-                        ? "text-slate-500 line-through"
-                        : "font-medium text-red-900"
-                    }`}
-                  >
-                    {
-                      task.task_text
-                    }
+                  <p className="mt-0.5 text-xs text-emerald-700">
+                    This area currently has no unresolved urgent tasks.
                   </p>
                 </div>
-
-                {canEdit && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      void removeTask(
-                        task
-                      )
-                    }
-                    aria-label="Remove urgent task"
-                    className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-slate-400 transition hover:bg-white hover:text-red-600"
-                  >
-                    Remove
-                  </button>
-                )}
               </div>
-            )
-          )
-        )}
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {outstandingTasks.map(
+                (
+                  task
+                ) => {
+                  const createdAt =
+                    formatTaskDate(
+                      task.created_at
+                    );
+
+                  return (
+                    <article
+                      key={
+                        task.id
+                      }
+                      className="rounded-2xl border border-red-200 bg-red-50/70 p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.03)]"
+                    >
+                      <div className="flex items-start gap-3">
+                        <StatusIcon
+                          completed={
+                            false
+                          }
+                        />
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                              Urgent
+                            </span>
+
+                            {createdAt && (
+                              <span className="text-[11px] font-medium text-slate-400">
+                                Raised {
+                                  createdAt
+                                }
+                              </span>
+                            )}
+                          </div>
+
+                          <p className="mt-2 whitespace-pre-wrap break-words text-sm font-semibold leading-5 text-slate-900">
+                            {
+                              task.task_text
+                            }
+                          </p>
+                        </div>
+                      </div>
+
+                      {canEdit && (
+                        <div className="mt-3 flex items-center justify-end gap-2 border-t border-red-200/70 pt-3">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void removeTask(
+                                task
+                              )
+                            }
+                            className="rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 transition hover:bg-white hover:text-red-700"
+                          >
+                            Remove
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void toggleTask(
+                                task
+                              )
+                            }
+                            className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700"
+                          >
+                            <svg
+                              viewBox="0 0 20 20"
+                              fill="none"
+                              className="h-3.5 w-3.5"
+                              aria-hidden="true"
+                            >
+                              <path
+                                d="M5 10.2 8.2 13.4 15 6.6"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+
+                            Mark resolved
+                          </button>
+                        </div>
+                      )}
+                    </article>
+                  );
+                }
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* RESOLVED TASKS */}
+        {!loading &&
+          resolvedTasks.length >
+            0 && (
+            <div className="mt-4 border-t border-slate-200 pt-3">
+              <button
+                type="button"
+                onClick={() =>
+                  setShowResolved(
+                    (current) =>
+                      !current
+                  )
+                }
+                className="flex w-full items-center justify-between gap-3 rounded-xl px-1 py-2 text-left transition hover:bg-slate-50"
+              >
+                <div>
+                  <p className="text-xs font-bold text-slate-700">
+                    Resolved tasks
+                  </p>
+
+                  <p className="mt-0.5 text-[11px] text-slate-400">
+                    {
+                      resolvedTasks.length
+                    }{" "}
+                    completed
+                  </p>
+                </div>
+
+                <svg
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  className={`h-4 w-4 text-slate-400 transition ${
+                    showResolved
+                      ? "rotate-180"
+                      : ""
+                  }`}
+                  aria-hidden="true"
+                >
+                  <path
+                    d="m6 8 4 4 4-4"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+
+              {showResolved && (
+                <div className="mt-2 space-y-2">
+                  {resolvedTasks.map(
+                    (
+                      task
+                    ) => {
+                      const updatedAt =
+                        formatTaskDate(
+                          task.updated_at ??
+                            task.created_at
+                        );
+
+                      return (
+                        <article
+                          key={
+                            task.id
+                          }
+                          className="rounded-xl border border-slate-200 bg-slate-50 p-3"
+                        >
+                          <div className="flex items-start gap-3">
+                            <StatusIcon
+                              completed
+                            />
+
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
+                                  Resolved
+                                </span>
+
+                                {updatedAt && (
+                                  <span className="text-[11px] font-medium text-slate-400">
+                                    {
+                                      updatedAt
+                                    }
+                                  </span>
+                                )}
+                              </div>
+
+                              <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-5 text-slate-600">
+                                {
+                                  task.task_text
+                                }
+                              </p>
+                            </div>
+                          </div>
+
+                          {canEdit && (
+                            <div className="mt-2.5 flex items-center justify-end gap-2 border-t border-slate-200 pt-2.5">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void removeTask(
+                                    task
+                                  )
+                                }
+                                className="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-slate-400 transition hover:bg-white hover:text-red-600"
+                              >
+                                Remove
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void toggleTask(
+                                    task
+                                  )
+                                }
+                                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-600 transition hover:border-slate-400 hover:text-slate-900"
+                              >
+                                Reopen
+                              </button>
+                            </div>
+                          )}
+                        </article>
+                      );
+                    }
+                  )}
+                </div>
+              )}
+            </div>
+          )}
       </div>
     </section>
   );

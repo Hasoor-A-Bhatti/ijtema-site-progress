@@ -15,7 +15,6 @@ const GENERATOR_RED = "#DC2626";
 const GENERATOR_RED_SELECTED = "#B91C1C";
 const GENERATOR_BORDER_MAROON = "#7F1D1D";
 
-const ACTIVE_GREEN = "#22C55E";
 const INACTIVE_BLUE = "#3B82F6";
 
 const MARKER_SIZE = 27;
@@ -57,10 +56,7 @@ export default function GeneratorLayer({
          * is_down = false -> active / operational
          */
         const active = !generator.is_down;
-
-        const pulseColour = active
-          ? ACTIVE_GREEN
-          : INACTIVE_BLUE;
+        const isDown = Boolean(generator.is_down);
 
         const markerSize = selected
           ? MARKER_SIZE + 4
@@ -126,77 +122,73 @@ export default function GeneratorLayer({
              * Green pulse = active / operational
              * Blue pulse  = inactive / down
              */}
-            <circle
-              cx={x}
-              cy={y}
-              r={19}
-              fill="none"
-              stroke={pulseColour}
-              strokeWidth={4}
-              opacity={0}
-              pointerEvents="none"
-            >
-              <animate
-                attributeName="r"
-                values="18;32"
-                dur="1.8s"
-                repeatCount="indefinite"
-              />
-              <animate
-                attributeName="opacity"
-                values="0.8;0"
-                dur="1.8s"
-                repeatCount="indefinite"
-              />
-              <animate
-                attributeName="stroke-width"
-                values="4;1"
-                dur="1.8s"
-                repeatCount="indefinite"
-              />
-            </circle>
+            {isDown && (
+              <>
+                <circle
+                  cx={x}
+                  cy={y}
+                  r={20}
+                  fill="none"
+                  stroke={INACTIVE_BLUE}
+                  strokeWidth={7}
+                  opacity={0}
+                  pointerEvents="none"
+                >
+                  <animate
+                    attributeName="r"
+                    values="20;40"
+                    dur="1.35s"
+                    repeatCount="indefinite"
+                  />
+                  <animate
+                    attributeName="opacity"
+                    values="1;0"
+                    dur="1.35s"
+                    repeatCount="indefinite"
+                  />
+                  <animate
+                    attributeName="stroke-width"
+                    values="7;2"
+                    dur="1.35s"
+                    repeatCount="indefinite"
+                  />
+                </circle>
 
-            {/*
-             * SECOND STAGGERED PULSE
-             *
-             * Gives the animation a smooth continuous effect.
-             */}
-            <circle
-              cx={x}
-              cy={y}
-              r={18}
-              fill="none"
-              stroke={pulseColour}
-              strokeWidth={3}
-              opacity={0}
-              pointerEvents="none"
-            >
-              <animate
-                attributeName="r"
-                values="18;29"
-                dur="1.8s"
-                begin="0.9s"
-                repeatCount="indefinite"
-              />
-              <animate
-                attributeName="opacity"
-                values="0.55;0"
-                dur="1.8s"
-                begin="0.9s"
-                repeatCount="indefinite"
-              />
-              <animate
-                attributeName="stroke-width"
-                values="3;1"
-                dur="1.8s"
-                begin="0.9s"
-                repeatCount="indefinite"
-              />
-            </circle>
+                <circle
+                  cx={x}
+                  cy={y}
+                  r={19}
+                  fill="none"
+                  stroke={INACTIVE_BLUE}
+                  strokeWidth={5.5}
+                  opacity={0}
+                  pointerEvents="none"
+                >
+                  <animate
+                    attributeName="r"
+                    values="19;35"
+                    dur="1.35s"
+                    begin="0.55s"
+                    repeatCount="indefinite"
+                  />
+                  <animate
+                    attributeName="opacity"
+                    values="0.9;0"
+                    dur="1.35s"
+                    begin="0.55s"
+                    repeatCount="indefinite"
+                  />
+                  <animate
+                    attributeName="stroke-width"
+                    values="5.5;1.5"
+                    dur="1.35s"
+                    begin="0.55s"
+                    repeatCount="indefinite"
+                  />
+                </circle>
+              </>
+            )}
 
-            {/*
-             * SELECTED OUTLINE
-             */}
             {selected && (
               <rect
                 x={markerX - 4}
@@ -288,20 +280,22 @@ export default function GeneratorLayer({
              * green = active
              * blue  = inactive
              */}
-            <circle
-              cx={
-                markerX +
-                markerSize -
-                3
-              }
-              cy={markerY + 3}
-              r={3.4}
-              fill={pulseColour}
-              stroke="white"
-              strokeWidth={1.5}
-              vectorEffect="non-scaling-stroke"
-              pointerEvents="none"
-            />
+            {isDown && (
+              <circle
+                cx={
+                  markerX +
+                  markerSize -
+                  3
+                }
+                cy={markerY + 3}
+                r={3.4}
+                fill={INACTIVE_BLUE}
+                stroke="white"
+                strokeWidth={1.5}
+                vectorEffect="non-scaling-stroke"
+                pointerEvents="none"
+              />
+            )}
           </g>
         );
       })}
