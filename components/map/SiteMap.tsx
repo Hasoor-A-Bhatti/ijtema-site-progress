@@ -11,12 +11,15 @@ import {
 
 import AreaDetailsCard from "@/components/area/AreaDetailsCard";
 import GeneratorDetailsCard from "@/components/generator/GeneratorDetailsCard";
+import TowerLightDetailsCard from "@/components/tower-light/TowerLightDetailsCard";
 import ProgressSummary from "@/components/dashboard/ProgressSummary";
+import EquipmentRequirementLayer from "@/components/map/EquipmentRequirementLayer";
 import GeneratorLayer from "@/components/map/GeneratorLayer";
 import InfrastructureLineLayer from "@/components/map/InfrastructureLineLayer";
 import MapToolbar from "@/components/map/MapToolbar";
 import SiteAreaLayer from "@/components/map/SiteAreaLayer";
 import TraceLayer from "@/components/map/TraceLayer";
+import TowerLightLayer from "@/components/map/TowerLightLayer";
 
 import type { MapView } from "@/components/map/MapToolbar";
 
@@ -24,6 +27,8 @@ import { infrastructureLines } from "@/data/infrastructureLines";
 import { siteAreas } from "@/data/siteAreas";
 
 import useGenerators from "@/hooks/useGenerators";
+import useOutstandingEquipmentCounts from "@/hooks/useOutstandingEquipmentCounts";
+import useTowerLights from "@/hooks/useTowerLights";
 import useUrgentTaskCounts from "@/hooks/useUrgentTaskCounts";
 
 import { supabase } from "@/lib/supabase";
@@ -321,13 +326,26 @@ export default function SiteMap() {
     setSelectedGeneratorId,
   ] = useState<string | null>(null);
 
+  const [
+    selectedTowerLightId,
+    setSelectedTowerLightId,
+  ] = useState<string | null>(null);
+
   const urgentTaskCounts =
     useUrgentTaskCounts();
+
+  const outstandingEquipmentCounts =
+    useOutstandingEquipmentCounts();
 
   const {
     generators,
     refresh: refreshGenerators,
   } = useGenerators();
+
+  const {
+    lights: towerLights,
+    refresh: refreshTowerLights,
+  } = useTowerLights();
 
   /*
    * CURRENTLY SELECTED FEATURE
@@ -355,6 +373,19 @@ export default function SiteMap() {
     ]
   );
 
+  const selectedTowerLight = useMemo(
+    () =>
+      towerLights.find(
+        (light) =>
+          light.id ===
+          selectedTowerLightId
+      ) ?? null,
+    [
+      towerLights,
+      selectedTowerLightId,
+    ]
+  );
+
   /*
    * FILTER POLYGON AREAS
    *
@@ -369,7 +400,7 @@ export default function SiteMap() {
    * Show polygon tracking areas such as Pad 1
    * and Pad 2 alongside the existing track lines.
    *
-   * FENCE / GENERATORS:
+   * FENCE / GENERATORS + LIGHTS:
    * Hide polygon site-area overlays.
    */
   const visibleSiteAreas =
@@ -652,6 +683,7 @@ export default function SiteMap() {
     setMapView(nextView);
     setSelectedFeatureId(null);
     setSelectedGeneratorId(null);
+    setSelectedTowerLightId(null);
   }
 
   /*
@@ -663,6 +695,7 @@ export default function SiteMap() {
     if (!traceMode) {
       setSelectedFeatureId(null);
       setSelectedGeneratorId(null);
+      setSelectedTowerLightId(null);
       return;
     }
 
@@ -700,6 +733,7 @@ export default function SiteMap() {
       if (next) {
         setSelectedFeatureId(null);
         setSelectedGeneratorId(null);
+        setSelectedTowerLightId(null);
       }
 
       return next;
@@ -934,6 +968,9 @@ export default function SiteMap() {
                         setSelectedGeneratorId(
                           null
                         );
+                        setSelectedTowerLightId(
+                          null
+                        );
                         setSelectedFeatureId(
                           featureId
                         );
@@ -963,6 +1000,48 @@ export default function SiteMap() {
                         setSelectedGeneratorId(
                           null
                         );
+                        setSelectedTowerLightId(
+                          null
+                        );
+                        setSelectedFeatureId(
+                          featureId
+                        );
+                      }}
+                    />
+
+                    {/*
+                     * OUTSTANDING EQUIPMENT
+                     *
+                     * Blue EQ markers appear only on marquee overlays
+                     * that still have at least one incomplete equipment
+                     * requirement. If an urgent-task marker also exists,
+                     * EQ is offset so the two indicators do not overlap.
+                     */}
+                    <EquipmentRequirementLayer
+                      areas={
+                        visibleSiteAreas
+                      }
+                      outstandingCounts={
+                        outstandingEquipmentCounts
+                      }
+                      urgentTaskCounts={
+                        urgentTaskCounts
+                      }
+                      selectedAreaId={
+                        selectedFeatureId
+                      }
+                      traceMode={
+                        traceMode
+                      }
+                      onSelectArea={(
+                        featureId
+                      ) => {
+                        setSelectedGeneratorId(
+                          null
+                        );
+                        setSelectedTowerLightId(
+                          null
+                        );
                         setSelectedFeatureId(
                           featureId
                         );
@@ -970,27 +1049,71 @@ export default function SiteMap() {
                     />
 
                     {/* GENERATORS */}
-                    <GeneratorLayer
-                      generators={
-                        generators
-                      }
-                      selectedGeneratorId={
-                        selectedGeneratorId
-                      }
-                      traceMode={
-                        traceMode
-                      }
-                      onSelectGenerator={(
-                        generatorId
-                      ) => {
-                        setSelectedFeatureId(
-                          null
-                        );
-                        setSelectedGeneratorId(
+                    {(mapView === "all" ||
+                      mapView === "power") && (
+                      <GeneratorLayer
+                        generators={
+                          generators
+                        }
+                        selectedGeneratorId={
+                          selectedGeneratorId
+                        }
+                        traceMode={
+                          traceMode
+                        }
+                        onSelectGenerator={(
                           generatorId
-                        );
-                      }}
-                    />
+                        ) => {
+                          setSelectedFeatureId(
+                            null
+                          );
+                          setSelectedTowerLightId(
+                            null
+                          );
+                          setSelectedGeneratorId(
+                            generatorId
+                          );
+                        }}
+                      />
+                    )}
+
+                    {/*
+                     * TOWER LIGHTS
+                     *
+                     * Rendered AFTER the marquee/site-area and
+                     * generator layers. SVG uses paint order for
+                     * pointer hit-testing, so the light receives
+                     * the click when its marker overlaps a marquee.
+                     * Clicking the surrounding marquee still opens
+                     * the normal area card.
+                     */}
+                    {(mapView === "all" ||
+                      mapView === "power") && (
+                      <TowerLightLayer
+                        lights={
+                          towerLights
+                        }
+                        selectedLightId={
+                          selectedTowerLightId
+                        }
+                        traceMode={
+                          traceMode
+                        }
+                        onSelectLight={(
+                          lightId
+                        ) => {
+                          setSelectedFeatureId(
+                            null
+                          );
+                          setSelectedGeneratorId(
+                            null
+                          );
+                          setSelectedTowerLightId(
+                            lightId
+                          );
+                        }}
+                      />
+                    )}
 
                     {/* TRACE PREVIEW */}
                     {(traceMode ||
@@ -1058,6 +1181,26 @@ export default function SiteMap() {
           }
           onClose={() =>
             setSelectedGeneratorId(
+              null
+            )
+          }
+        />
+      )}
+
+      {/* TOWER LIGHT DETAILS */}
+      {selectedTowerLight && (
+        <TowerLightDetailsCard
+          key={
+            selectedTowerLight.id
+          }
+          light={
+            selectedTowerLight
+          }
+          onChanged={
+            refreshTowerLights
+          }
+          onClose={() =>
+            setSelectedTowerLightId(
               null
             )
           }
