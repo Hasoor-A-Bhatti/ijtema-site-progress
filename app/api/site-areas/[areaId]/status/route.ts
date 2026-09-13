@@ -188,55 +188,17 @@ export async function PATCH(
   }
 
   /*
-   * 6. SIGN-OFF EQUIPMENT CHECK
+   * 6. EQUIPMENT DOES NOT BLOCK SIGN-OFF
    *
-   * Normal site areas must have every recorded equipment
-   * requirement received and manually confirmed before sign-off.
-   * Infrastructure has no equipment workflow, so lines skip this.
+   * Outstanding equipment requirements are tracked
+   * independently from marquee progress.
+   *
+   * A marquee may therefore be Signed Off while its
+   * blue EQ indicator remains visible on the map.
+   * The EQ indicator disappears automatically only
+   * when all recorded equipment requirements are
+   * fully received and confirmed.
    */
-  if (newStatus === "signed_off" && !isInfrastructure) {
-    const {
-      data: equipmentRequirements,
-      error: equipmentError,
-    } = await supabaseServer
-      .from("equipment_requirements")
-      .select(
-        "id, quantity_required, quantity_received, completed"
-      )
-      .eq("area_id", cleanAreaId);
-
-    if (equipmentError) {
-      console.error(
-        "Failed to check equipment requirements:",
-        equipmentError
-      );
-
-      return NextResponse.json(
-        {
-          error:
-            "Equipment requirements could not be checked before updating progress.",
-        },
-        { status: 500 }
-      );
-    }
-
-    const incompleteEquipment =
-      equipmentRequirements?.filter(
-        (item) =>
-          item.quantity_received < item.quantity_required ||
-          !item.completed
-      ) ?? [];
-
-    if (incompleteEquipment.length > 0) {
-      return NextResponse.json(
-        {
-          error:
-            "This area cannot be Signed Off until all equipment requirements have been received and confirmed.",
-        },
-        { status: 409 }
-      );
-    }
-  }
 
   /* 7. UPDATE STATUS */
   const { data: updatedArea, error: updateError } =
