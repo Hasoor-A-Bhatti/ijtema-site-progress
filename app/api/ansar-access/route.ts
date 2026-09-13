@@ -19,9 +19,6 @@ const ACCESS_COOKIE =
 const SESSION_DURATION_SECONDS =
   60 * 60 * 12;
 
-const DEFAULT_PHONE =
-  "07480852059";
-
 interface TaskUser {
   username: string;
   password: string;
@@ -35,13 +32,11 @@ export interface AnsarTaskSession {
 }
 
 /*
- * Two accounts only for now.
+ * Two restricted Ansar task accounts.
  *
- * Both default to the number supplied:
- * 07480852059
- *
- * Change the `phone` value here later if
- * either account needs a different recipient.
+ * Each account has its own registered
+ * phone number so the correct reporter
+ * receives the completion SMS.
  */
 const USERS: TaskUser[] = [
   {
@@ -50,7 +45,7 @@ const USERS: TaskUser[] = [
     password:
       "AnsarTask2026A!",
     phone:
-      DEFAULT_PHONE,
+      "07852776038",
   },
   {
     username:
@@ -58,7 +53,7 @@ const USERS: TaskUser[] = [
     password:
       "AnsarTask2026B!",
     phone:
-      DEFAULT_PHONE,
+      "07802737593",
   },
 ];
 

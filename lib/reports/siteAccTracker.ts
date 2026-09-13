@@ -21,6 +21,7 @@ export const SITE_ACCOUNTS_EXPENSE_DEPARTMENTS = [
   { id: "stage", name: "Stage" },
   { id: "stock-distribution", name: "Stock and Distribution" },
   { id: "water-maintenance", name: "Water Maintenance" },
+  { id: "mileage-claim", name: "Mileage Claim" },
 ] as const;
 
 export type SiteAccountsExpenseField =
@@ -170,17 +171,14 @@ export function normaliseSiteAccountsForm(input: unknown):
       rawEntry.submitted,
       `${department.name} submitted amount`
     );
-
     const pendingApproval = normaliseMoney(
       rawEntry.pending_approval,
       `${department.name} pending approval amount`
     );
-
     const approvedRemaining = normaliseMoney(
       rawEntry.approved_remaining,
       `${department.name} approved / remaining amount`
     );
-
     const paid = normaliseMoney(
       rawEntry.paid,
       `${department.name} paid amount`
@@ -260,11 +258,9 @@ export function getSiteAccountsTotals(
   return Object.values(tracker.departmental_expenses).reduce<SiteAccountsTotals>(
     (totals, entry) => ({
       paid: roundMoney(totals.paid + entry.paid),
-
       remaining: roundMoney(
         totals.remaining + entry.approved_remaining
       ),
-
       pendingApproval: roundMoney(
         totals.pendingApproval + entry.pending_approval
       ),

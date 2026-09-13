@@ -433,39 +433,68 @@ export async function POST(
     raisedByUsername &&
     raisedByPhone
   ) {
-    const adminPhone =
+    const adminPhones =
       process.env
-        .IJTEMA_ADMIN_ALERT_PHONE;
+        .IJTEMA_ADMIN_ALERT_PHONES
+        ?.split(",")
+        .map(
+          (phone) =>
+            phone.trim()
+        )
+        .filter(Boolean) ??
+      [];
 
     if (
-      adminPhone
+      adminPhones.length >
+      0
     ) {
       adminSmsAttempted =
         true;
 
-      const smsResult =
-        await sendUrgentTaskCreatedSms({
-          phoneNumber:
-            adminPhone,
-          areaName:
-            areaCheck.name ??
-            "Site area",
-          taskText,
-          raisedBy:
-            raisedByUsername,
-        });
+      const smsResults =
+        await Promise.all(
+          adminPhones.map(
+            (phoneNumber) =>
+              sendUrgentTaskCreatedSms({
+                phoneNumber,
+                areaName:
+                  areaCheck.name ??
+                  "Site area",
+                taskText,
+                raisedBy:
+                  raisedByUsername,
+              })
+          )
+        );
 
       adminSmsSent =
-        smsResult.success;
+        smsResults.every(
+          (result) =>
+            result.success
+        );
+
+      const failedMessages =
+        smsResults
+          .filter(
+            (result) =>
+              !result.success
+          )
+          .map(
+            (result) =>
+              result.error ??
+              "SMS could not be sent."
+          );
 
       adminSmsError =
-        smsResult.success
-          ? null
-          : smsResult.error ??
-            "The site alert SMS could not be sent.";
+        failedMessages.length >
+        0
+          ? failedMessages.join(
+              " | "
+            )
+          : null;
     } else {
       console.warn(
-        "IJTEMA_ADMIN_ALERT_PHONE is not configured, so new urgent-task SMS alerts are disabled."
+        "IJTEMA_ADMIN_ALERT_PHONES is not configured, so new urgent-task SMS alerts are disabled."
       );
     }
   }
