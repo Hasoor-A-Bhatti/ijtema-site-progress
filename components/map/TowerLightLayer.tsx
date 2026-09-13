@@ -19,28 +19,46 @@ interface TowerLightLayerProps {
       void;
 }
 
-const LIGHT_YELLOW =
+const BULB_ON_FILL =
   "#FACC15";
 
-const LIGHT_YELLOW_OFF =
-  "#FDE68A";
+const BULB_OFF_FILL =
+  "#FEF3C7";
 
-const LIGHT_BORDER =
+const BULB_DOWN_FILL =
+  "#FCA5A5";
+
+const BULB_GLASS_STROKE =
   "#A16207";
 
-const LIGHT_SELECTED_BORDER =
+const BULB_GLASS_SELECTED_STROKE =
   "#78350F";
+
+const BULB_DOWN_STROKE =
+  "#B91C1C";
+
+const BULB_BASE_FILL =
+  "#6B7280";
+
+const BULB_BASE_STROKE =
+  "#374151";
+
+const RAY_ON_COLOR =
+  "#FDE047";
 
 const DOWN_RED =
   "#EF4444";
 
-const MARKER_RADIUS = 15;
+/*
+ * Overall visual scale for the mini lightbulb.
+ * This keeps it similar in footprint to the
+ * current tower-light map marker.
+ */
+const BULB_SCALE = 1.05;
 
 /*
- * Deliberately smaller than the generator click
- * target. The visible tower light still has an easy
- * mobile target, but nearby marquee space remains
- * clickable and opens the marquee card.
+ * Transparent click target. Kept tight enough so
+ * nearby marquee clicks still work naturally.
  */
 const CLICK_RADIUS = 25;
 
@@ -95,6 +113,20 @@ export default function TowerLightLayer({
             light.status ===
             "down";
 
+          const bulbFill =
+            isDown
+              ? BULB_DOWN_FILL
+              : isOn
+                ? BULB_ON_FILL
+                : BULB_OFF_FILL;
+
+          const bulbStroke =
+            selected
+              ? BULB_GLASS_SELECTED_STROKE
+              : isDown
+                ? BULB_DOWN_STROKE
+                : BULB_GLASS_STROKE;
+
           return (
             <g
               key={
@@ -146,24 +178,19 @@ export default function TowerLightLayer({
                 />
               )}
 
-              {/*
-               * ON
-               *
-               * Two staggered yellow rings create a
-               * smooth radiant light effect.
-               */}
+              {/* ON: warm radiant pulse */}
               {isOn && (
                 <>
                   <circle
                     cx={x}
-                    cy={y}
-                    r={18}
+                    cy={y - 8}
+                    r={16}
                     fill="none"
                     stroke={
-                      LIGHT_YELLOW
+                      RAY_ON_COLOR
                     }
                     strokeWidth={
-                      7
+                      6
                     }
                     opacity={
                       0
@@ -172,77 +199,34 @@ export default function TowerLightLayer({
                   >
                     <animate
                       attributeName="r"
-                      values="18;38"
-                      dur="1.45s"
-                      repeatCount="indefinite"
-                    />
-
-                    <animate
-                      attributeName="opacity"
-                      values="0.95;0"
-                      dur="1.45s"
-                      repeatCount="indefinite"
-                    />
-
-                    <animate
-                      attributeName="stroke-width"
-                      values="7;1.5"
-                      dur="1.45s"
-                      repeatCount="indefinite"
-                    />
-                  </circle>
-
-                  <circle
-                    cx={x}
-                    cy={y}
-                    r={17}
-                    fill="none"
-                    stroke="#FDE047"
-                    strokeWidth={
-                      5
-                    }
-                    opacity={
-                      0
-                    }
-                    pointerEvents="none"
-                  >
-                    <animate
-                      attributeName="r"
-                      values="17;31"
-                      dur="1.45s"
-                      begin="0.55s"
+                      values="16;34"
+                      dur="1.4s"
                       repeatCount="indefinite"
                     />
 
                     <animate
                       attributeName="opacity"
                       values="0.8;0"
-                      dur="1.45s"
-                      begin="0.55s"
+                      dur="1.4s"
+                      repeatCount="indefinite"
+                    />
+
+                    <animate
+                      attributeName="stroke-width"
+                      values="6;1.5"
+                      dur="1.4s"
                       repeatCount="indefinite"
                     />
                   </circle>
-                </>
-              )}
 
-              {/*
-               * DOWN
-               *
-               * A stronger/faster red pulse immediately
-               * separates a fault from a normal OFF light.
-               */}
-              {isDown && (
-                <>
                   <circle
                     cx={x}
-                    cy={y}
-                    r={18}
+                    cy={y - 8}
+                    r={15}
                     fill="none"
-                    stroke={
-                      DOWN_RED
-                    }
+                    stroke="#FFF7AE"
                     strokeWidth={
-                      7
+                      4
                     }
                     opacity={
                       0
@@ -251,21 +235,59 @@ export default function TowerLightLayer({
                   >
                     <animate
                       attributeName="r"
-                      values="18;39"
+                      values="15;27"
+                      dur="1.4s"
+                      begin="0.5s"
+                      repeatCount="indefinite"
+                    />
+
+                    <animate
+                      attributeName="opacity"
+                      values="0.75;0"
+                      dur="1.4s"
+                      begin="0.5s"
+                      repeatCount="indefinite"
+                    />
+                  </circle>
+                </>
+              )}
+
+              {/* DOWN: red fault pulse */}
+              {isDown && (
+                <>
+                  <circle
+                    cx={x}
+                    cy={y - 8}
+                    r={16}
+                    fill="none"
+                    stroke={
+                      DOWN_RED
+                    }
+                    strokeWidth={
+                      6
+                    }
+                    opacity={
+                      0
+                    }
+                    pointerEvents="none"
+                  >
+                    <animate
+                      attributeName="r"
+                      values="16;35"
                       dur="1.15s"
                       repeatCount="indefinite"
                     />
 
                     <animate
                       attributeName="opacity"
-                      values="1;0"
+                      values="0.95;0"
                       dur="1.15s"
                       repeatCount="indefinite"
                     />
 
                     <animate
                       attributeName="stroke-width"
-                      values="7;1.5"
+                      values="6;1.5"
                       dur="1.15s"
                       repeatCount="indefinite"
                     />
@@ -273,12 +295,12 @@ export default function TowerLightLayer({
 
                   <circle
                     cx={x}
-                    cy={y}
-                    r={17}
+                    cy={y - 8}
+                    r={15}
                     fill="none"
                     stroke="#F87171"
                     strokeWidth={
-                      5
+                      4
                     }
                     opacity={
                       0
@@ -287,93 +309,244 @@ export default function TowerLightLayer({
                   >
                     <animate
                       attributeName="r"
-                      values="17;31"
+                      values="15;28"
                       dur="1.15s"
-                      begin="0.42s"
+                      begin="0.4s"
                       repeatCount="indefinite"
                     />
 
                     <animate
                       attributeName="opacity"
-                      values="0.85;0"
+                      values="0.8;0"
                       dur="1.15s"
-                      begin="0.42s"
+                      begin="0.4s"
                       repeatCount="indefinite"
                     />
                   </circle>
                 </>
               )}
 
-              {selected && (
-                <circle
-                  cx={x}
-                  cy={y}
-                  r={
-                    MARKER_RADIUS +
-                    5
+              <g
+                transform={`translate(${x} ${y}) scale(${BULB_SCALE})`}
+                pointerEvents="none"
+              >
+                {/* ON: visible rays coming out of the bulb */}
+                {isOn && (
+                  <g
+                    stroke={
+                      RAY_ON_COLOR
+                    }
+                    strokeWidth="2.6"
+                    strokeLinecap="round"
+                    opacity="0.95"
+                    vectorEffect="non-scaling-stroke"
+                  >
+                    <line
+                      x1="0"
+                      y1="-28"
+                      x2="0"
+                      y2="-37"
+                    />
+                    <line
+                      x1="-13"
+                      y1="-24"
+                      x2="-19"
+                      y2="-31"
+                    />
+                    <line
+                      x1="13"
+                      y1="-24"
+                      x2="19"
+                      y2="-31"
+                    />
+                    <line
+                      x1="-18"
+                      y1="-10"
+                      x2="-27"
+                      y2="-10"
+                    />
+                    <line
+                      x1="18"
+                      y1="-10"
+                      x2="27"
+                      y2="-10"
+                    />
+                    <line
+                      x1="-11"
+                      y1="2"
+                      x2="-17"
+                      y2="8"
+                    />
+                    <line
+                      x1="11"
+                      y1="2"
+                      x2="17"
+                      y2="8"
+                    />
+                  </g>
+                )}
+
+                {/* selected outline */}
+                {selected && (
+                  <path
+                    d="M 0 -25
+                       C 10 -25 17 -17 17 -8
+                       C 17 -2 14 3 10 7
+                       L 10 10
+                       C 10 12 8 14 6 14
+                       L -6 14
+                       C -8 14 -10 12 -10 10
+                       L -10 7
+                       C -14 3 -17 -2 -17 -8
+                       C -17 -17 -10 -25 0 -25 Z"
+                    fill="none"
+                    stroke="white"
+                    strokeWidth="3"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                )}
+
+                {/* bulb glass */}
+                <path
+                  d="M 0 -22
+                     C 9 -22 15 -15 15 -7
+                     C 15 -2 13 2 10 6
+                     C 8 8 7 10 7 12
+                     L -7 12
+                     C -7 10 -8 8 -10 6
+                     C -13 2 -15 -2 -15 -7
+                     C -15 -15 -9 -22 0 -22 Z"
+                  fill={
+                    bulbFill
                   }
-                  fill="none"
-                  stroke="white"
+                  stroke={
+                    bulbStroke
+                  }
                   strokeWidth={
-                    3
+                    selected
+                      ? 3.6
+                      : 3
                   }
                   vectorEffect="non-scaling-stroke"
-                  pointerEvents="none"
                 />
-              )}
 
-              <circle
-                cx={x}
-                cy={y}
-                r={
-                  MARKER_RADIUS
-                }
-                fill={
-                  isDown
-                    ? "#FCA5A5"
-                    : isOn
-                      ? LIGHT_YELLOW
-                      : LIGHT_YELLOW_OFF
-                }
-                stroke={
-                  selected
-                    ? LIGHT_SELECTED_BORDER
-                    : isDown
-                      ? "#B91C1C"
-                      : LIGHT_BORDER
-                }
-                strokeWidth={
-                  selected
-                    ? 4
-                    : 3
-                }
-                vectorEffect="non-scaling-stroke"
-              />
+                {/* subtle filament */}
+                <path
+                  d="M -5 -1
+                     C -3 -5 -1 -3 0 -1
+                     C 1 -3 3 -5 5 -1"
+                  fill="none"
+                  stroke={
+                    isDown
+                      ? "#991B1B"
+                      : isOn
+                        ? "#FFFFFF"
+                        : "#CA8A04"
+                  }
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  opacity={
+                    isOn
+                      ? 0.95
+                      : 0.8
+                  }
+                  vectorEffect="non-scaling-stroke"
+                />
 
-              {/*
-               * Simple centre lens.
-               *
-               * Keeps the marker looking like a light rather
-               * than a generic map dot, without adding text.
-               */}
-              <circle
-                cx={x}
-                cy={y}
-                r={5}
-                fill={
-                  isDown
-                    ? "#DC2626"
-                    : isOn
-                      ? "#FFF7AE"
-                      : "#FFFBEB"
-                }
-                opacity={
-                  isDown
-                    ? 1
-                    : 0.95
-                }
-                pointerEvents="none"
-              />
+                {/* glass highlight */}
+                {!isDown && (
+                  <path
+                    d="M -7 -15
+                       C -11 -12 -12 -6 -10 -1"
+                    fill="none"
+                    stroke="white"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    opacity={
+                      isOn
+                        ? 0.55
+                        : 0.4
+                    }
+                    vectorEffect="non-scaling-stroke"
+                  />
+                )}
+
+                {/* bulb neck */}
+                <rect
+                  x="-6"
+                  y="12"
+                  width="12"
+                  height="5"
+                  rx="2"
+                  fill="#9CA3AF"
+                  stroke={
+                    BULB_BASE_STROKE
+                  }
+                  strokeWidth="2"
+                  vectorEffect="non-scaling-stroke"
+                />
+
+                {/* bulb base */}
+                <rect
+                  x="-8"
+                  y="17"
+                  width="16"
+                  height="9"
+                  rx="2.5"
+                  fill={
+                    BULB_BASE_FILL
+                  }
+                  stroke={
+                    BULB_BASE_STROKE
+                  }
+                  strokeWidth="2.2"
+                  vectorEffect="non-scaling-stroke"
+                />
+
+                {/* base ridges */}
+                <line
+                  x1="-5"
+                  y1="19.5"
+                  x2="5"
+                  y2="19.5"
+                  stroke="#D1D5DB"
+                  strokeWidth="1.4"
+                  vectorEffect="non-scaling-stroke"
+                />
+                <line
+                  x1="-5"
+                  y1="22.5"
+                  x2="5"
+                  y2="22.5"
+                  stroke="#D1D5DB"
+                  strokeWidth="1.4"
+                  vectorEffect="non-scaling-stroke"
+                />
+
+                {/* down cross accent */}
+                {isDown && (
+                  <g
+                    stroke="#991B1B"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    vectorEffect="non-scaling-stroke"
+                  >
+                    <line
+                      x1="-8"
+                      y1="-16"
+                      x2="8"
+                      y2="0"
+                    />
+                    <line
+                      x1="8"
+                      y1="-16"
+                      x2="-8"
+                      y2="0"
+                    />
+                  </g>
+                )}
+              </g>
             </g>
           );
         }
