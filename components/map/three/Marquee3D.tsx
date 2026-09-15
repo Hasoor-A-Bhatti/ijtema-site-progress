@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { Edges } from "@react-three/drei";
+import { useFrame } from "@react-three/fiber";
 
 import HoverLabel3D from "@/components/map/three/HoverLabel3D";
 
@@ -455,6 +456,83 @@ export default function Marquee3D({
   ] =
     useState(false);
 
+  const urgentPulseRef =
+    useRef<THREE.Group>(
+      null
+    );
+
+  const urgentWallMaterialRef =
+    useRef<THREE.MeshBasicMaterial>(
+      null
+    );
+
+  const urgentRoofMaterialRef =
+    useRef<THREE.MeshBasicMaterial>(
+      null
+    );
+
+  useFrame((state) => {
+    if (
+      urgentCount <= 0
+    ) {
+      return;
+    }
+
+    const pulse =
+      (
+        Math.sin(
+          state.clock
+            .elapsedTime *
+            3.15
+        ) +
+        1
+      ) /
+      2;
+
+    if (
+      urgentPulseRef
+        .current
+    ) {
+      const scale =
+        1.015 +
+        pulse *
+          0.035;
+
+      urgentPulseRef
+        .current
+        .scale
+        .set(
+          scale,
+          scale,
+          scale
+        );
+    }
+
+    if (
+      urgentWallMaterialRef
+        .current
+    ) {
+      urgentWallMaterialRef
+        .current
+        .opacity =
+        0.10 +
+        pulse *
+          0.28;
+    }
+
+    if (
+      urgentRoofMaterialRef
+        .current
+    ) {
+      urgentRoofMaterialRef
+        .current
+        .opacity =
+        0.12 +
+        pulse *
+          0.34;
+    }
+  });
+
   const points = useMemo(
     () => parsePoints(area.points),
     [area.points]
@@ -713,6 +791,97 @@ export default function Marquee3D({
             />
           </mesh>
         ))}
+
+      {/* URGENT ISSUE — PULSING RED MARQUEE OVERLAY */}
+      {urgentCount > 0 && (
+        <group
+          ref={
+            urgentPulseRef
+          }
+        >
+          <mesh
+            geometry={
+              wallGeometry
+            }
+            raycast={() =>
+              null
+            }
+          >
+            <meshBasicMaterial
+              ref={
+                urgentWallMaterialRef
+              }
+              color="#EF4444"
+              transparent
+              opacity={0.1}
+              depthWrite={
+                false
+              }
+              side={
+                THREE.DoubleSide
+              }
+              blending={
+                THREE.AdditiveBlending
+              }
+              toneMapped={
+                false
+              }
+            />
+          </mesh>
+
+          <mesh
+            geometry={
+              roofGeometry
+            }
+            raycast={() =>
+              null
+            }
+          >
+            <meshBasicMaterial
+              ref={
+                urgentRoofMaterialRef
+              }
+              color="#FF2D2D"
+              transparent
+              opacity={0.12}
+              depthWrite={
+                false
+              }
+              side={
+                THREE.DoubleSide
+              }
+              blending={
+                THREE.AdditiveBlending
+              }
+              toneMapped={
+                false
+              }
+            />
+          </mesh>
+
+          <mesh
+            geometry={
+              wallGeometry
+            }
+            raycast={() =>
+              null
+            }
+          >
+            <meshBasicMaterial
+              color="#DC2626"
+              wireframe
+              transparent
+              opacity={0.34}
+              depthWrite={
+                false
+              }
+              toneMapped={
+                false
+              }
+            />
+          </mesh>
+        </group>
+      )}
 
       {selected && (
         <mesh
