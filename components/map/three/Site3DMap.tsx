@@ -317,67 +317,22 @@ export default function Site3DMap({
 
         {isNight && (
           <>
-            {/* Broad site illumination — warm flood lighting without
-                flattening the night-time atmosphere. */}
-            <pointLight
-              position={[
-                mapCentre.x - 14,
-                12,
-                mapCentre.z - 16,
-              ]}
-              intensity={78}
-              distance={34}
-              decay={2}
-              color="#FFD58A"
-            />
-
-            <pointLight
-              position={[
-                mapCentre.x + 13,
-                13,
-                mapCentre.z - 2,
-              ]}
-              intensity={86}
-              distance={36}
-              decay={2}
-              color="#FFE2A8"
-            />
-
-            <pointLight
-              position={[
-                mapCentre.x - 11,
-                12,
-                mapCentre.z + 17,
-              ]}
-              intensity={74}
-              distance={33}
-              decay={2}
-              color="#FFD08A"
-            />
-
-            <pointLight
-              position={[
-                mapCentre.x + 14,
-                12,
-                mapCentre.z + 24,
-              ]}
-              intensity={72}
-              distance={32}
-              decay={2}
-              color="#FFE0A0"
-            />
-
-            {/* A very soft cool fill keeps distant structures readable. */}
+            {/*
+             * Keep a low-level cool fill so the whole site remains
+             * readable at night, but let ON tower lights provide the
+             * meaningful local illumination. This makes dark gaps
+             * between coverage zones easy to identify.
+             */}
             <pointLight
               position={[
                 mapCentre.x,
-                28,
+                30,
                 mapCentre.z,
               ]}
-              intensity={62}
-              distance={72}
+              intensity={24}
+              distance={78}
               decay={2}
-              color="#6EA8FF"
+              color="#5F8FD8"
             />
           </>
         )}
@@ -528,6 +483,7 @@ export default function Site3DMap({
               <TowerLight3D
                 key={light.id}
                 light={light}
+                sceneMode={sceneMode}
                 selected={selectedLightId === light.id}
                 onSelect={handleSelectLight}
               />

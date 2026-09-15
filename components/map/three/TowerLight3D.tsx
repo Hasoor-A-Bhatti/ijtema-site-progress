@@ -10,6 +10,7 @@ import type {
 interface TowerLight3DProps {
   light: SiteTowerLight;
   selected?: boolean;
+  sceneMode?: "day" | "night";
   onSelect?: (
     lightId: string
   ) => void;
@@ -33,9 +34,23 @@ const TYRE_COLOUR = "#111827";
 const RIM_COLOUR = "#94A3B8";
 const JACK_COLOUR = "#64748B";
 
+/*
+ * Night-time tower-light coverage.
+ *
+ * Because the visible tower model is scaled to 85%, the geometry
+ * radius is slightly larger so the final world-space illuminated
+ * radius is approximately 5.5 map units.
+ *
+ * Increase/decrease LIGHT_COVERAGE_RADIUS if you later want to model
+ * a different real-world throw distance.
+ */
+const LIGHT_COVERAGE_RADIUS = 8.0;
+const LIGHT_COVERAGE_COLOUR = "#FFE7A3";
+
 export default function TowerLight3D({
   light,
   selected = false,
+  sceneMode = "day",
   onSelect,
 }: TowerLight3DProps) {
   /*
@@ -78,6 +93,10 @@ export default function TowerLight3D({
         ? LIGHT_ON
         : LIGHT_OFF;
 
+  const showNightCoverage =
+    sceneMode === "night" &&
+    isOn;
+
   return (
     <group
       position={[
@@ -100,6 +119,138 @@ export default function TowerLight3D({
         );
       }}
     >
+      {showNightCoverage && (
+        <>
+          {/*
+           * Ground illumination pool.
+           * This is deliberately a soft radial gradient rather than
+           * a hard circle, so overlapping tower lights naturally
+           * show where coverage is strong and where dark gaps remain.
+           */}
+          <mesh
+            position={[
+              0,
+              0.028,
+              0,
+            ]}
+            rotation={[
+              -Math.PI / 2,
+              0,
+              0,
+            ]}
+            raycast={() =>
+              null
+            }
+            renderOrder={2}
+          >
+            <circleGeometry
+              args={[
+                LIGHT_COVERAGE_RADIUS,
+                72,
+              ]}
+            />
+
+            <shaderMaterial
+              transparent
+              depthWrite={false}
+              blending={
+                THREE.AdditiveBlending
+              }
+              uniforms={{
+                uColour: {
+                  value:
+                    new THREE.Color(
+                      LIGHT_COVERAGE_COLOUR
+                    ),
+                },
+                uOpacity: {
+                  value: 0.48,
+                },
+              }}
+              vertexShader={`
+                varying vec2 vUv;
+
+                void main() {
+                  vUv = uv;
+
+                  gl_Position =
+                    projectionMatrix *
+                    modelViewMatrix *
+                    vec4(
+                      position,
+                      1.0
+                    );
+                }
+              `}
+              fragmentShader={`
+                uniform vec3 uColour;
+                uniform float uOpacity;
+
+                varying vec2 vUv;
+
+                void main() {
+                  float distanceFromCentre =
+                    distance(
+                      vUv,
+                      vec2(0.5)
+                    ) * 2.0;
+
+                  float softEdge =
+                    1.0 -
+                    smoothstep(
+                      0.12,
+                      1.0,
+                      distanceFromCentre
+                    );
+
+                  float brightCore =
+                    1.0 -
+                    smoothstep(
+                      0.0,
+                      0.42,
+                      distanceFromCentre
+                    );
+
+                  float alpha =
+                    (
+                      softEdge * 0.58 +
+                      brightCore * 0.42
+                    ) *
+                    uOpacity;
+
+                  gl_FragColor =
+                    vec4(
+                      uColour,
+                      alpha
+                    );
+                }
+              `}
+            />
+          </mesh>
+
+          {/*
+           * Actual 3D light source. This makes nearby marquees,
+           * tracking and infrastructure receive warm light, while
+           * the coverage disc makes the operational footprint easy
+           * to assess from above.
+           */}
+          <pointLight
+            position={[
+              0,
+              MAST_HEIGHT + 0.2,
+              0,
+            ]}
+            color="#FFF0C2"
+            intensity={34}
+            distance={
+              LIGHT_COVERAGE_RADIUS *
+              1.08
+            }
+            decay={2}
+          />
+        </>
+      )}
+
       {/* MOBILE TRAILER CHASSIS */}
       <mesh
         position={[0, 0.13, 0]}

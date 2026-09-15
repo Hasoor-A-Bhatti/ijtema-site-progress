@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import * as THREE from "three";
 import { Edges } from "@react-three/drei";
 
@@ -209,6 +209,12 @@ export default function SiteAreaFeature3D({
   ] =
     useState(false);
 
+  const [
+    pulsePhase,
+    setPulsePhase,
+  ] =
+    useState(0);
+
   const points = useMemo(
     () => parsePoints(area.points),
     [area.points]
@@ -253,7 +259,76 @@ export default function SiteAreaFeature3D({
   const isCabin = area.type === "cabin" && !isFlatCompound;
   const isServicePad = area.type === "service_pad";
 
+  /*
+   * Urgent pulse applies to every normal site area, but never to
+   * tracking or fence features. Pad 1 / Pad 2 are tracking areas,
+   * so they remain excluded even though they use this component.
+   */
+  const isTrackOrFence =
+    area.type ===
+      "metal_tracking" ||
+    area.type ===
+      "rubber_tracking" ||
+    area.type ===
+      "fence";
+
+  const shouldPulseUrgent =
+    urgentCount > 0 &&
+    !isTrackOrFence;
+
+  useEffect(() => {
+    if (
+      !shouldPulseUrgent
+    ) {
+      return;
+    }
+
+    const interval =
+      window.setInterval(
+        () => {
+          setPulsePhase(
+            (current) =>
+              (
+                current +
+                0.28
+              ) %
+              (
+                Math.PI *
+                2
+              )
+          );
+        },
+        80
+      );
+
+    return () => {
+      window.clearInterval(
+        interval
+      );
+    };
+  }, [shouldPulseUrgent]);
+
+  const urgentPulse =
+    (
+      Math.sin(
+        pulsePhase
+      ) +
+      1
+    ) /
+    2;
+
+  const urgentPulseOpacity =
+    0.10 +
+    urgentPulse *
+      0.34;
+
+  const urgentPulseScale =
+    1.012 +
+    urgentPulse *
+      0.032;
+
   const structureHeight = isPad
+
     ? 0.08
     : isServicePad
       ? 0.08
@@ -535,6 +610,234 @@ export default function SiteAreaFeature3D({
           </mesh>
         )}
 
+      {/* URGENT ISSUE — PULSING RED AREA OVERLAY */}
+      {shouldPulseUrgent && (
+        <group
+          scale={[
+            urgentPulseScale,
+            urgentPulseScale,
+            urgentPulseScale,
+          ]}
+        >
+          {isWaterTank && (
+            <>
+              <mesh
+                position={[
+                  0,
+                  0.78,
+                  0,
+                ]}
+                raycast={() =>
+                  null
+                }
+              >
+                <cylinderGeometry
+                  args={[
+                    tankRadius *
+                      1.015,
+                    tankRadius *
+                      1.015,
+                    1.58,
+                    32,
+                  ]}
+                />
+                <meshBasicMaterial
+                  color="#EF4444"
+                  transparent
+                  opacity={
+                    urgentPulseOpacity
+                  }
+                  depthWrite={false}
+                  side={
+                    THREE.DoubleSide
+                  }
+                  blending={
+                    THREE.AdditiveBlending
+                  }
+                  toneMapped={false}
+                />
+              </mesh>
+
+              <mesh
+                position={[
+                  0,
+                  1.59,
+                  0,
+                ]}
+                raycast={() =>
+                  null
+                }
+              >
+                <cylinderGeometry
+                  args={[
+                    tankRadius *
+                      0.98,
+                    tankRadius *
+                      1.02,
+                    0.14,
+                    32,
+                  ]}
+                />
+                <meshBasicMaterial
+                  color="#EF4444"
+                  transparent
+                  opacity={
+                    urgentPulseOpacity
+                  }
+                  depthWrite={false}
+                  side={
+                    THREE.DoubleSide
+                  }
+                  blending={
+                    THREE.AdditiveBlending
+                  }
+                  toneMapped={false}
+                />
+              </mesh>
+            </>
+          )}
+
+          {isWaterWell && (
+            <>
+              <mesh
+                position={[
+                  0,
+                  0.22,
+                  0,
+                ]}
+                raycast={() =>
+                  null
+                }
+              >
+                <cylinderGeometry
+                  args={[
+                    wellRadius *
+                      1.03,
+                    wellRadius *
+                      1.03,
+                    0.47,
+                    32,
+                  ]}
+                />
+                <meshBasicMaterial
+                  color="#EF4444"
+                  transparent
+                  opacity={
+                    urgentPulseOpacity
+                  }
+                  depthWrite={false}
+                  side={
+                    THREE.DoubleSide
+                  }
+                  blending={
+                    THREE.AdditiveBlending
+                  }
+                  toneMapped={false}
+                />
+              </mesh>
+
+              <mesh
+                position={[
+                  0,
+                  0.475,
+                  0,
+                ]}
+                rotation={[
+                  -Math.PI / 2,
+                  0,
+                  0,
+                ]}
+                raycast={() =>
+                  null
+                }
+              >
+                <ringGeometry
+                  args={[
+                    wellRadius *
+                      0.52,
+                    wellRadius *
+                      0.96,
+                    32,
+                  ]}
+                />
+                <meshBasicMaterial
+                  color="#EF4444"
+                  transparent
+                  opacity={
+                    urgentPulseOpacity
+                  }
+                  depthWrite={false}
+                  side={
+                    THREE.DoubleSide
+                  }
+                  blending={
+                    THREE.AdditiveBlending
+                  }
+                  toneMapped={false}
+                />
+              </mesh>
+            </>
+          )}
+
+          {!isWaterTank &&
+            !isWaterWell &&
+            geometry && (
+              <mesh
+                geometry={
+                  geometry
+                }
+                raycast={() =>
+                  null
+                }
+              >
+                <meshBasicMaterial
+                  color="#EF4444"
+                  transparent
+                  opacity={
+                    urgentPulseOpacity
+                  }
+                  depthWrite={false}
+                  side={
+                    THREE.DoubleSide
+                  }
+                  blending={
+                    THREE.AdditiveBlending
+                  }
+                  toneMapped={false}
+                />
+              </mesh>
+            )}
+
+          {exactTopGeometry &&
+            !isPad && (
+              <mesh
+                geometry={
+                  exactTopGeometry
+                }
+                raycast={() =>
+                  null
+                }
+              >
+                <meshBasicMaterial
+                  color="#EF4444"
+                  transparent
+                  opacity={
+                    urgentPulseOpacity
+                  }
+                  depthWrite={false}
+                  side={
+                    THREE.DoubleSide
+                  }
+                  blending={
+                    THREE.AdditiveBlending
+                  }
+                  toneMapped={false}
+                />
+              </mesh>
+            )}
+        </group>
+      )}
+
       {selected && (
         <mesh position={[0, highlightY, 0]} rotation={[-Math.PI / 2, 0, 0]}>
           <ringGeometry args={[0.38, 0.52, 32]} />
@@ -542,7 +845,7 @@ export default function SiteAreaFeature3D({
         </mesh>
       )}
 
-      {urgentCount > 0 && (
+      {shouldPulseUrgent && (
         <group position={[0, urgentY, 0]}>
           <mesh>
             <sphereGeometry args={[0.18, 20, 20]} />
