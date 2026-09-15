@@ -20,6 +20,7 @@ import MapToolbar from "@/components/map/MapToolbar";
 import SiteAreaLayer from "@/components/map/SiteAreaLayer";
 import TraceLayer from "@/components/map/TraceLayer";
 import TowerLightLayer from "@/components/map/TowerLightLayer";
+import Site3DMap from "@/components/map/three/Site3DMap";
 
 import type { MapView } from "@/components/map/MapToolbar";
 
@@ -44,6 +45,10 @@ const MAP_HEIGHT = 3370;
 type TraceGeometry =
   | "area"
   | "line";
+
+type MapMode =
+  | "2d"
+  | "3d";
 
 const ALL_FEATURES = [
   ...siteAreas,
@@ -290,6 +295,9 @@ function makeSvgMonochrome(
 }
 
 export default function SiteMap() {
+  const [mapMode, setMapMode] =
+    useState<MapMode>("2d");
+
   const [traceMode, setTraceMode] =
     useState(false);
 
@@ -671,6 +679,29 @@ export default function SiteMap() {
   }
 
   /*
+   * 2D / 3D MODE
+   *
+   * Tracing belongs to the flat 2D SVG map. Entering
+   * 3D therefore exits trace mode and clears any
+   * unfinished trace points.
+   */
+  function changeMapMode(
+    nextMode: MapMode
+  ) {
+    if (nextMode === mapMode) {
+      return;
+    }
+
+    setMapMode(nextMode);
+
+    if (nextMode === "3d") {
+      setTraceMode(false);
+      setPoints([]);
+      setSelectedTowerLightId(null);
+    }
+  }
+
+  /*
    * CHANGE MAP VIEW
    *
    * Close any currently-open details card
@@ -811,398 +842,357 @@ export default function SiteMap() {
 
   return (
     <div className="relative flex h-[calc(100dvh-72px)] w-full flex-col overflow-hidden bg-slate-100">
-      <TransformWrapper
-        minScale={0.7}
-        maxScale={8}
-        centerOnInit
-        wheel={{
-          step: 0.1,
-        }}
-        pinch={{
-          disabled: traceMode,
-        }}
-        doubleClick={{
-          disabled: traceMode,
-        }}
-        panning={{
-          disabled: traceMode,
-        }}
-      >
-        {({
-          zoomIn,
-          zoomOut,
-          resetTransform,
-        }) => (
-          <>
-            <MapToolbar
-              traceMode={
-                traceMode
-              }
-              traceGeometry={
-                traceGeometry
-              }
-              mapView={mapView}
-              pointsCount={
-                points.length
-              }
-              onToggleTrace={
-                toggleTraceMode
-              }
-              onTraceGeometryChange={
-                changeTraceGeometry
-              }
-              onMapViewChange={
-                changeMapView
-              }
-              onUndo={
-                undoPoint
-              }
-              onClear={
-                clearPoints
-              }
-              onCopy={
-                copyPoints
-              }
-              onZoomIn={
-                zoomIn
-              }
-              onZoomOut={
-                zoomOut
-              }
-              onReset={
-                resetTransform
-              }
-            />
-
-            {/*
-             * Overall progress remains based
-             * on the whole site regardless of
-             * the current visual filter.
-             */}
-            <ProgressSummary
-              areas={ALL_FEATURES}
-              statuses={
-                areaStatuses
-              }
-            />
-
-            <div className="min-h-0 flex-1 overflow-hidden">
-              <TransformComponent
-                wrapperStyle={
-                  TRANSFORM_WRAPPER_STYLE
+      {mapMode === "2d" ? (
+        <TransformWrapper
+          minScale={0.7}
+          maxScale={8}
+          centerOnInit
+          wheel={{
+            step: 0.1,
+          }}
+          pinch={{
+            disabled: traceMode,
+          }}
+          doubleClick={{
+            disabled: traceMode,
+          }}
+          panning={{
+            disabled: traceMode,
+          }}
+        >
+          {({
+            zoomIn,
+            zoomOut,
+            resetTransform,
+          }) => (
+            <>
+              <MapToolbar
+                mapMode={mapMode}
+                onMapModeChange={
+                  changeMapMode
                 }
-                contentStyle={
-                  TRANSFORM_CONTENT_STYLE
+                traceMode={traceMode}
+                traceGeometry={traceGeometry}
+                mapView={mapView}
+                pointsCount={points.length}
+                onToggleTrace={toggleTraceMode}
+                onTraceGeometryChange={
+                  changeTraceGeometry
                 }
-              >
-                <div
-                  className="relative w-[850px] max-w-none select-none"
-                  style={{
-                    aspectRatio: `${MAP_WIDTH} / ${MAP_HEIGHT}`,
-                  }}
+                onMapViewChange={changeMapView}
+                onUndo={undoPoint}
+                onClear={clearPoints}
+                onCopy={copyPoints}
+                onZoomIn={zoomIn}
+                onZoomOut={zoomOut}
+                onReset={resetTransform}
+              />
+
+              <ProgressSummary
+                areas={ALL_FEATURES}
+                statuses={areaStatuses}
+              />
+
+              <div className="min-h-0 flex-1 overflow-hidden">
+                <TransformComponent
+                  wrapperStyle={
+                    TRANSFORM_WRAPPER_STYLE
+                  }
+                  contentStyle={
+                    TRANSFORM_CONTENT_STYLE
+                  }
                 >
-                  {/*
-                   * SITE PLAN — HIGH-QUALITY MONOCHROME
-                   *
-                   * The converted map remains inline SVG/vector
-                   * content, so labels and linework stay sharp
-                   * while zooming. No CSS grayscale filter is used.
-                   */}
-                  {monochromeMapSvg ? (
-                    <div
-                      role="img"
-                      aria-label="National Ijtema 2026 site plan"
-                      className="pointer-events-none absolute inset-0 h-full w-full select-none overflow-hidden"
-                      dangerouslySetInnerHTML={{
-                        __html:
-                          monochromeMapSvg,
-                      }}
-                    />
-                  ) : (
-                    /*
-                     * Unfiltered vector fallback while the
-                     * monochrome SVG is being prepared.
-                     */
-                    <img
-                      src="/maps/site-map.svg"
-                      alt="National Ijtema 2026 site plan"
-                      draggable={false}
-                      loading="eager"
-                      fetchPriority="high"
-                      className="pointer-events-none absolute inset-0 h-full w-full select-none"
-                    />
-                  )}
-
-                  {/* INTERACTIVE MAP */}
-                  <svg
-                    viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}
-                    className={`absolute inset-0 h-full w-full ${
-                      traceMode
-                        ? "cursor-crosshair"
-                        : ""
-                    }`}
-                    onClick={
-                      handleMapClick
-                    }
+                  <div
+                    className="relative w-[850px] max-w-none select-none"
+                    style={{
+                      aspectRatio: `${MAP_WIDTH} / ${MAP_HEIGHT}`,
+                    }}
                   >
-                    {/* INFRASTRUCTURE */}
-                    <InfrastructureLineLayer
-                      lines={
-                        visibleInfrastructureLines
-                      }
-                      statuses={
-                        areaStatuses
-                      }
-                      urgentTaskCounts={
-                        urgentTaskCounts
-                      }
-                      selectedAreaId={
-                        selectedFeatureId
-                      }
-                      traceMode={
-                        traceMode
-                      }
-                      onSelectArea={(
-                        featureId
-                      ) => {
-                        setSelectedGeneratorId(
-                          null
-                        );
-                        setSelectedTowerLightId(
-                          null
-                        );
-                        setSelectedFeatureId(
-                          featureId
-                        );
-                      }}
-                    />
+                    {monochromeMapSvg ? (
+                      <div
+                        role="img"
+                        aria-label="National Ijtema 2026 site plan"
+                        className="pointer-events-none absolute inset-0 h-full w-full select-none overflow-hidden"
+                        dangerouslySetInnerHTML={{
+                          __html: monochromeMapSvg,
+                        }}
+                      />
+                    ) : (
+                      <img
+                        src="/maps/site-map.svg"
+                        alt="National Ijtema 2026 site plan"
+                        draggable={false}
+                        loading="eager"
+                        fetchPriority="high"
+                        className="pointer-events-none absolute inset-0 h-full w-full select-none"
+                      />
+                    )}
 
-                    {/* MARQUEES / SITE AREAS */}
-                    <SiteAreaLayer
-                      areas={
-                        visibleSiteAreas
-                      }
-                      statuses={
-                        areaStatuses
-                      }
-                      urgentTaskCounts={
-                        urgentTaskCounts
-                      }
-                      selectedAreaId={
-                        selectedFeatureId
-                      }
-                      traceMode={
+                    <svg
+                      viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`}
+                      className={`absolute inset-0 h-full w-full ${
                         traceMode
-                      }
-                      onSelectArea={(
-                        featureId
-                      ) => {
-                        setSelectedGeneratorId(
-                          null
-                        );
-                        setSelectedTowerLightId(
-                          null
-                        );
-                        setSelectedFeatureId(
+                          ? "cursor-crosshair"
+                          : ""
+                      }`}
+                      onClick={handleMapClick}
+                    >
+                      <InfrastructureLineLayer
+                        lines={
+                          visibleInfrastructureLines
+                        }
+                        statuses={areaStatuses}
+                        urgentTaskCounts={
+                          urgentTaskCounts
+                        }
+                        selectedAreaId={
+                          selectedFeatureId
+                        }
+                        traceMode={traceMode}
+                        onSelectArea={(
                           featureId
-                        );
-                      }}
-                    />
-
-                    {/*
-                     * OUTSTANDING EQUIPMENT
-                     *
-                     * Blue EQ markers appear only on marquee overlays
-                     * that still have at least one incomplete equipment
-                     * requirement. If an urgent-task marker also exists,
-                     * EQ is offset so the two indicators do not overlap.
-                     */}
-                    <EquipmentRequirementLayer
-                      areas={
-                        visibleSiteAreas
-                      }
-                      outstandingCounts={
-                        outstandingEquipmentCounts
-                      }
-                      urgentTaskCounts={
-                        urgentTaskCounts
-                      }
-                      selectedAreaId={
-                        selectedFeatureId
-                      }
-                      traceMode={
-                        traceMode
-                      }
-                      onSelectArea={(
-                        featureId
-                      ) => {
-                        setSelectedGeneratorId(
-                          null
-                        );
-                        setSelectedTowerLightId(
-                          null
-                        );
-                        setSelectedFeatureId(
-                          featureId
-                        );
-                      }}
-                    />
-
-                    {/* GENERATORS */}
-                    {(mapView === "all" ||
-                      mapView === "power") && (
-                      <GeneratorLayer
-                        generators={
-                          generators
-                        }
-                        selectedGeneratorId={
-                          selectedGeneratorId
-                        }
-                        traceMode={
-                          traceMode
-                        }
-                        onSelectGenerator={(
-                          generatorId
                         ) => {
-                          setSelectedFeatureId(
+                          setSelectedGeneratorId(
                             null
                           );
                           setSelectedTowerLightId(
                             null
                           );
+                          setSelectedFeatureId(
+                            featureId
+                          );
+                        }}
+                      />
+
+                      <SiteAreaLayer
+                        areas={visibleSiteAreas}
+                        statuses={areaStatuses}
+                        urgentTaskCounts={
+                          urgentTaskCounts
+                        }
+                        selectedAreaId={
+                          selectedFeatureId
+                        }
+                        traceMode={traceMode}
+                        onSelectArea={(
+                          featureId
+                        ) => {
                           setSelectedGeneratorId(
+                            null
+                          );
+                          setSelectedTowerLightId(
+                            null
+                          );
+                          setSelectedFeatureId(
+                            featureId
+                          );
+                        }}
+                      />
+
+                      <EquipmentRequirementLayer
+                        areas={visibleSiteAreas}
+                        outstandingCounts={
+                          outstandingEquipmentCounts
+                        }
+                        urgentTaskCounts={
+                          urgentTaskCounts
+                        }
+                        selectedAreaId={
+                          selectedFeatureId
+                        }
+                        traceMode={traceMode}
+                        onSelectArea={(
+                          featureId
+                        ) => {
+                          setSelectedGeneratorId(
+                            null
+                          );
+                          setSelectedTowerLightId(
+                            null
+                          );
+                          setSelectedFeatureId(
+                            featureId
+                          );
+                        }}
+                      />
+
+                      {(mapView === "all" ||
+                        mapView === "power") && (
+                        <GeneratorLayer
+                          generators={generators}
+                          selectedGeneratorId={
+                            selectedGeneratorId
+                          }
+                          traceMode={traceMode}
+                          onSelectGenerator={(
                             generatorId
-                          );
-                        }}
-                      />
-                    )}
+                          ) => {
+                            setSelectedFeatureId(
+                              null
+                            );
+                            setSelectedTowerLightId(
+                              null
+                            );
+                            setSelectedGeneratorId(
+                              generatorId
+                            );
+                          }}
+                        />
+                      )}
 
-                    {/*
-                     * TOWER LIGHTS
-                     *
-                     * Rendered AFTER the marquee/site-area and
-                     * generator layers. SVG uses paint order for
-                     * pointer hit-testing, so the light receives
-                     * the click when its marker overlaps a marquee.
-                     * Clicking the surrounding marquee still opens
-                     * the normal area card.
-                     */}
-                    {(mapView === "all" ||
-                      mapView === "power") && (
-                      <TowerLightLayer
-                        lights={
-                          towerLights
-                        }
-                        selectedLightId={
-                          selectedTowerLightId
-                        }
-                        traceMode={
-                          traceMode
-                        }
-                        onSelectLight={(
-                          lightId
-                        ) => {
-                          setSelectedFeatureId(
-                            null
-                          );
-                          setSelectedGeneratorId(
-                            null
-                          );
-                          setSelectedTowerLightId(
+                      {(mapView === "all" ||
+                        mapView === "power") && (
+                        <TowerLightLayer
+                          lights={towerLights}
+                          selectedLightId={
+                            selectedTowerLightId
+                          }
+                          traceMode={traceMode}
+                          onSelectLight={(
                             lightId
-                          );
-                        }}
-                      />
-                    )}
+                          ) => {
+                            setSelectedFeatureId(
+                              null
+                            );
+                            setSelectedGeneratorId(
+                              null
+                            );
+                            setSelectedTowerLightId(
+                              lightId
+                            );
+                          }}
+                        />
+                      )}
 
-                    {/* TRACE PREVIEW */}
-                    {(traceMode ||
-                      points.length >
-                        0) && (
-                      <TraceLayer
-                        points={
-                          points
-                        }
-                        mode={
-                          traceGeometry
-                        }
-                      />
-                    )}
-                  </svg>
-                </div>
-              </TransformComponent>
-            </div>
-          </>
-        )}
-      </TransformWrapper>
+                      {(traceMode ||
+                        points.length > 0) && (
+                        <TraceLayer
+                          points={points}
+                          mode={traceGeometry}
+                        />
+                      )}
+                    </svg>
+                  </div>
+                </TransformComponent>
+              </div>
+            </>
+          )}
+        </TransformWrapper>
+      ) : (
+        <>
+          <MapToolbar
+            mapMode={mapMode}
+            onMapModeChange={
+              changeMapMode
+            }
+          />
 
-      {/* FEATURE DETAILS */}
+          <ProgressSummary
+            areas={ALL_FEATURES}
+            statuses={areaStatuses}
+          />
+
+          <div className="min-h-0 flex-1 overflow-hidden">
+            <Site3DMap
+              statuses={areaStatuses}
+              urgentTaskCounts={
+                urgentTaskCounts
+              }
+              generators={generators}
+              lights={towerLights}
+              selectedAreaId={
+                selectedFeatureId
+              }
+              selectedGeneratorId={
+                selectedGeneratorId
+              }
+              selectedLightId={
+                selectedTowerLightId
+              }
+              onSelectArea={(
+                featureId
+              ) => {
+                setSelectedGeneratorId(
+                  null
+                );
+                setSelectedTowerLightId(
+                  null
+                );
+                setSelectedFeatureId(
+                  featureId
+                );
+              }}
+              onSelectGenerator={(
+                generatorId
+              ) => {
+                setSelectedFeatureId(
+                  null
+                );
+                setSelectedTowerLightId(
+                  null
+                );
+                setSelectedGeneratorId(
+                  generatorId
+                );
+              }}
+              onSelectLight={(
+                lightId
+              ) => {
+                setSelectedFeatureId(
+                  null
+                );
+                setSelectedGeneratorId(
+                  null
+                );
+                setSelectedTowerLightId(
+                  lightId
+                );
+              }}
+            />
+          </div>
+        </>
+      )}
+
       {selectedFeature && (
         <AreaDetailsCard
-          key={
-            selectedFeature.id
-          }
-          area={
-            selectedFeature
-          }
+          key={selectedFeature.id}
+          area={selectedFeature}
           status={
             areaStatuses[
               selectedFeature.id
             ] ??
             selectedFeature.status
           }
-          onStatusChange={(
-            status
-          ) =>
+          onStatusChange={(status) =>
             updateAreaStatus(
               selectedFeature.id,
               status
             )
           }
           onClose={() =>
-            setSelectedFeatureId(
-              null
-            )
+            setSelectedFeatureId(null)
           }
         />
       )}
 
-      {/* GENERATOR DETAILS */}
       {selectedGenerator && (
         <GeneratorDetailsCard
-          key={
-            selectedGenerator.id
-          }
-          generator={
-            selectedGenerator
-          }
-          onChanged={
-            refreshGenerators
-          }
+          key={selectedGenerator.id}
+          generator={selectedGenerator}
+          onChanged={refreshGenerators}
           onClose={() =>
-            setSelectedGeneratorId(
-              null
-            )
+            setSelectedGeneratorId(null)
           }
         />
       )}
 
-      {/* TOWER LIGHT DETAILS */}
       {selectedTowerLight && (
         <TowerLightDetailsCard
-          key={
-            selectedTowerLight.id
-          }
-          light={
-            selectedTowerLight
-          }
-          onChanged={
-            refreshTowerLights
-          }
+          key={selectedTowerLight.id}
+          light={selectedTowerLight}
+          onChanged={refreshTowerLights}
           onClose={() =>
-            setSelectedTowerLightId(
-              null
-            )
+            setSelectedTowerLightId(null)
           }
         />
       )}

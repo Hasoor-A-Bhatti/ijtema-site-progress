@@ -135,9 +135,7 @@ export default function SiteAreaLayer({
            * warning animation.
            */
           const hasUrgentIssue =
-            area.type ===
-              "marquee" &&
-            urgentCount > 0;
+  urgentCount > 0;
 
           const colour =
             STATUS_CONFIG[
