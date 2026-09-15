@@ -844,8 +844,9 @@ export default function SiteMap() {
     <div className="relative flex h-[calc(100dvh-72px)] w-full flex-col overflow-hidden bg-slate-100">
       {mapMode === "2d" ? (
         <TransformWrapper
-          minScale={0.7}
+          minScale={0.8}
           maxScale={8}
+          initialScale={1.45}
           centerOnInit
           wheel={{
             step: 0.1,
@@ -883,9 +884,15 @@ export default function SiteMap() {
                 onUndo={undoPoint}
                 onClear={clearPoints}
                 onCopy={copyPoints}
-                onZoomIn={zoomIn}
-                onZoomOut={zoomOut}
-                onReset={resetTransform}
+                onZoomIn={() =>
+                  zoomIn(0.28, 180)
+                }
+                onZoomOut={() =>
+                  zoomOut(0.28, 180)
+                }
+                onReset={() =>
+                  resetTransform(220)
+                }
               />
 
               <ProgressSummary

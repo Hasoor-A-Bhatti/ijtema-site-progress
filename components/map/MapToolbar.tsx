@@ -211,8 +211,8 @@ export default function MapToolbar({
             <div className="flex shrink-0 items-center gap-2">
               <button
                 type="button"
-                onClick={
-                  onZoomOut
+                onClick={() =>
+                  onZoomOut?.()
                 }
                 disabled={
                   !onZoomOut
@@ -226,8 +226,8 @@ export default function MapToolbar({
 
               <button
                 type="button"
-                onClick={
-                  onZoomIn
+                onClick={() =>
+                  onZoomIn?.()
                 }
                 disabled={
                   !onZoomIn
@@ -241,8 +241,8 @@ export default function MapToolbar({
 
               <button
                 type="button"
-                onClick={
-                  onReset
+                onClick={() =>
+                  onReset?.()
                 }
                 disabled={
                   !onReset
