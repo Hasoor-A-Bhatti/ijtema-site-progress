@@ -50,6 +50,10 @@ type MapMode =
   | "2d"
   | "3d";
 
+type SceneMode =
+  | "day"
+  | "night";
+
 const ALL_FEATURES = [
   ...siteAreas,
   ...infrastructureLines,
@@ -297,6 +301,12 @@ function makeSvgMonochrome(
 export default function SiteMap() {
   const [mapMode, setMapMode] =
     useState<MapMode>("2d");
+
+  const [
+    sceneMode,
+    setSceneMode,
+  ] =
+    useState<SceneMode>("day");
 
   const [traceMode, setTraceMode] =
     useState(false);
@@ -1092,6 +1102,12 @@ export default function SiteMap() {
             onMapModeChange={
               changeMapMode
             }
+            sceneMode={
+              sceneMode
+            }
+            onSceneModeChange={
+              setSceneMode
+            }
           />
 
           <ProgressSummary
@@ -1101,6 +1117,7 @@ export default function SiteMap() {
 
           <div className="min-h-0 flex-1 overflow-hidden">
             <Site3DMap
+              sceneMode={sceneMode}
               statuses={areaStatuses}
               urgentTaskCounts={
                 urgentTaskCounts

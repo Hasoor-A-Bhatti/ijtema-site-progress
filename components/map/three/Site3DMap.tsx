@@ -11,6 +11,7 @@ import {
   ContactShadows,
   Grid,
   OrbitControls,
+  Stars,
 } from "@react-three/drei";
 
 import Generator3D from "@/components/map/three/Generator3D";
@@ -33,7 +34,12 @@ const MAP_SCALE = 0.02;
 
 type NavigationMode = "rotate" | "pan";
 
+export type SceneMode =
+  | "day"
+  | "night";
+
 interface Site3DMapProps {
+  sceneMode?: SceneMode;
   statuses?: Record<string, SiteStatus>;
   urgentTaskCounts?: Record<string, number>;
   generators?: SiteGenerator[];
@@ -72,6 +78,7 @@ const TRACKING_POLYGON_AREAS = siteAreas.filter(
 );
 
 export default function Site3DMap({
+  sceneMode = "day",
   statuses,
   urgentTaskCounts,
   generators = [],
@@ -187,8 +194,37 @@ export default function Site3DMap({
     }
   }
 
+  const isNight =
+    sceneMode === "night";
+
+  const sceneBackground =
+    isNight
+      ? "#06111F"
+      : "#F4F5E8";
+
+  const groundColour =
+    isNight
+      ? "#172235"
+      : "#EEF1D7";
+
+  const gridCellColour =
+    isNight
+      ? "#24364D"
+      : "#E1E5CB";
+
+  const gridSectionColour =
+    isNight
+      ? "#35506B"
+      : "#D2D8B7";
+
   return (
-    <div className="relative h-full min-h-[640px] w-full overflow-hidden bg-slate-100">
+    <div
+      className={`relative h-full min-h-[640px] w-full overflow-hidden ${
+        isNight
+          ? "bg-slate-950"
+          : "bg-slate-100"
+      }`}
+    >
       <Canvas
         shadows
         dpr={[1, 1.75]}
@@ -204,23 +240,66 @@ export default function Site3DMap({
         }}
         onPointerMissed={clearSelection}
       >
-        {/* very very light green/yellow overall background */}
         <color
           attach="background"
-          args={["#F4F5E8"]}
+          args={[sceneBackground]}
         />
 
-        <ambientLight intensity={0.66} />
+        {isNight && (
+          <Stars
+            radius={115}
+            depth={48}
+            count={950}
+            factor={2.2}
+            saturation={0.08}
+            fade
+            speed={0.16}
+          />
+        )}
+
+        <ambientLight
+          intensity={
+            isNight
+              ? 0.34
+              : 0.66
+          }
+          color={
+            isNight
+              ? "#A9C7FF"
+              : "#FFFFFF"
+          }
+        />
 
         <hemisphereLight
-          intensity={0.58}
-          color="#FFFDF5"
-          groundColor="#DDE3C9"
+          intensity={
+            isNight
+              ? 0.42
+              : 0.58
+          }
+          color={
+            isNight
+              ? "#88AEEF"
+              : "#FFFDF5"
+          }
+          groundColor={
+            isNight
+              ? "#101927"
+              : "#DDE3C9"
+          }
         />
 
         <directionalLight
           castShadow
-          intensity={1.48}
+          intensity={
+            isNight
+              ? 0.72
+              : 1.48
+          }
+          color={
+            isNight
+              ? "#AFCBFF"
+              : "#FFFFFF"
+          }
           position={[
             mapCentre.x - 18,
             62,
@@ -236,6 +315,73 @@ export default function Site3DMap({
           shadow-camera-bottom={-80}
         />
 
+        {isNight && (
+          <>
+            {/* Broad site illumination — warm flood lighting without
+                flattening the night-time atmosphere. */}
+            <pointLight
+              position={[
+                mapCentre.x - 14,
+                12,
+                mapCentre.z - 16,
+              ]}
+              intensity={78}
+              distance={34}
+              decay={2}
+              color="#FFD58A"
+            />
+
+            <pointLight
+              position={[
+                mapCentre.x + 13,
+                13,
+                mapCentre.z - 2,
+              ]}
+              intensity={86}
+              distance={36}
+              decay={2}
+              color="#FFE2A8"
+            />
+
+            <pointLight
+              position={[
+                mapCentre.x - 11,
+                12,
+                mapCentre.z + 17,
+              ]}
+              intensity={74}
+              distance={33}
+              decay={2}
+              color="#FFD08A"
+            />
+
+            <pointLight
+              position={[
+                mapCentre.x + 14,
+                12,
+                mapCentre.z + 24,
+              ]}
+              intensity={72}
+              distance={32}
+              decay={2}
+              color="#FFE0A0"
+            />
+
+            {/* A very soft cool fill keeps distant structures readable. */}
+            <pointLight
+              position={[
+                mapCentre.x,
+                28,
+                mapCentre.z,
+              ]}
+              intensity={62}
+              distance={72}
+              decay={2}
+              color="#6EA8FF"
+            />
+          </>
+        )}
+
         <Suspense fallback={null}>
           {/* clean flat plane - no texture */}
           <mesh
@@ -247,7 +393,7 @@ export default function Site3DMap({
               args={[worldWidth, worldHeight]}
             />
             <meshPhysicalMaterial
-              color="#EEF1D7"
+              color={groundColour}
               roughness={0.94}
               metalness={0}
               clearcoat={0.02}
@@ -261,8 +407,8 @@ export default function Site3DMap({
             cellThickness={0.24}
             sectionSize={5}
             sectionThickness={0.48}
-            cellColor="#E1E5CB"
-            sectionColor="#D2D8B7"
+            cellColor={gridCellColour}
+            sectionColor={gridSectionColour}
             fadeDistance={88}
             fadeStrength={1}
             infiniteGrid={false}
@@ -274,12 +420,20 @@ export default function Site3DMap({
               0.015,
               mapCentre.z,
             ]}
-            opacity={0.22}
+            opacity={
+              isNight
+                ? 0.34
+                : 0.22
+            }
             scale={86}
             blur={2.6}
             far={22}
             resolution={1024}
-            color="#334155"
+            color={
+              isNight
+                ? "#020617"
+                : "#334155"
+            }
           />
 
           {/* horizontal mirror so 3D matches 2D map orientation */}

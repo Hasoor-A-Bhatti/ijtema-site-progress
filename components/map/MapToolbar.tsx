@@ -15,10 +15,19 @@ export type MapMode =
   | "2d"
   | "3d";
 
+export type SceneMode =
+  | "day"
+  | "night";
+
 interface MapToolbarProps {
   mapMode: MapMode;
   onMapModeChange:
     (mode: MapMode) =>
+      void;
+
+  sceneMode?: SceneMode;
+  onSceneModeChange?:
+    (mode: SceneMode) =>
       void;
 
   traceMode?: boolean;
@@ -183,6 +192,9 @@ function MapModeControl({
 export default function MapToolbar({
   mapMode,
   onMapModeChange,
+
+  sceneMode = "day",
+  onSceneModeChange,
 
   traceMode = false,
   traceGeometry = "area",
@@ -412,14 +424,60 @@ export default function MapToolbar({
               </div>
             </div>
 
-            <MapModeControl
-              mapMode={
-                mapMode
-              }
-              onMapModeChange={
-                onMapModeChange
-              }
-            />
+            <div className="flex shrink-0 items-center gap-2">
+              <div className="flex items-center rounded-xl border border-slate-200 bg-slate-100 p-1 shadow-sm">
+                <button
+                  type="button"
+                  onClick={() =>
+                    onSceneModeChange?.(
+                      "day"
+                    )
+                  }
+                  aria-pressed={
+                    sceneMode ===
+                    "day"
+                  }
+                  className={`h-10 rounded-lg px-4 text-sm font-semibold transition ${
+                    sceneMode ===
+                    "day"
+                      ? "bg-amber-100 text-amber-900 shadow-sm"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  ☀ Day
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    onSceneModeChange?.(
+                      "night"
+                    )
+                  }
+                  aria-pressed={
+                    sceneMode ===
+                    "night"
+                  }
+                  className={`h-10 rounded-lg px-4 text-sm font-semibold transition ${
+                    sceneMode ===
+                    "night"
+                      ? "bg-slate-900 text-white shadow-sm"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  ◐ Night
+                </button>
+              </div>
+
+              <MapModeControl
+                mapMode={
+                  mapMode
+                }
+                onMapModeChange={
+                  onMapModeChange
+                }
+              />
+            </div>
           </>
         )}
       </div>
