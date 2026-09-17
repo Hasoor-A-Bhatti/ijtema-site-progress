@@ -25,7 +25,7 @@ interface AreaCheck {
 /*
  * One server-side lookup determines both whether
  * the area exists and which restricted group,
- * if any, is allowed to raise a task there.
+ * if any, is allowed to raise a task there. xyz
  */
 async function getAreaCheck(
   areaId: string
