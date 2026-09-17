@@ -19,8 +19,6 @@ const ACCESS_COOKIE =
 const SESSION_DURATION_SECONDS =
   60 * 60 * 12;
 
-const DEFAULT_PHONE =
-  "07480852059";
 
 interface TaskUser {
   username: string;
@@ -35,30 +33,27 @@ export interface LajnaTaskSession {
 }
 
 /*
- * Two accounts only for now.
+ * Restricted Lajna task accounts.
  *
- * Both default to the number supplied:
- * 07480852059
- *
- * Change the `phone` value here later if
- * either account needs a different recipient.
+ * Each username is linked to its own phone number so that
+ * completion SMS messages are returned to the correct user.
  */
 const USERS: TaskUser[] = [
   {
     username:
-      "LajnaSite1",
+      "LajnaTask1",
     password:
       "LajnaTask2026A!",
     phone:
-      DEFAULT_PHONE,
+      "07963840361",
   },
   {
     username:
-      "LajnaSite2",
+      "LajnaTask2",
     password:
       "LajnaTask2026B!",
     phone:
-      DEFAULT_PHONE,
+      "07919002572",
   },
 ];
 
