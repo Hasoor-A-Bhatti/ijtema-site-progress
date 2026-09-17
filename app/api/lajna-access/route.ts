@@ -41,7 +41,7 @@ export interface LajnaTaskSession {
 const USERS: TaskUser[] = [
   {
     username:
-      "LajnaTask1",
+      "LajnaSite1",
     password:
       "LajnaTask2026A!",
     phone:
@@ -49,7 +49,7 @@ const USERS: TaskUser[] = [
   },
   {
     username:
-      "LajnaTask2",
+      "LajnaSite2",
     password:
       "LajnaTask2026B!",
     phone:
