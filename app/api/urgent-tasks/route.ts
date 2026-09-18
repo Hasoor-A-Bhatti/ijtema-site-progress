@@ -77,6 +77,9 @@ async function getAreaCheck(
     RestrictedGroup | null =
     normalizedName.startsWith(
       "lajna"
+    ) ||
+    normalizedName.startsWith(
+      "nasirat"
     )
       ? "lajna"
       : normalizedName.startsWith(
