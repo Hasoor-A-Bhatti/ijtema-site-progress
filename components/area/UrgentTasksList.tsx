@@ -228,19 +228,30 @@ export default function UrgentTasksList({
       string | null
     >(null);
 
-  const normalizedAreaName =
-    areaName
+  /*
+   * Restricted task access is based on the
+   * permanent area ID rather than the visible
+   * map label.
+   *
+   * The map can therefore be renamed/relabelled
+   * without accidentally changing permissions.
+   */
+  const normalizedAreaId =
+    areaId
       .trim()
       .toLowerCase();
 
   const isLajnaArea =
-    normalizedAreaName.startsWith(
-      "lajna"
+    normalizedAreaId.startsWith(
+      "lajna-"
+    ) ||
+    normalizedAreaId.startsWith(
+      "nasirat-"
     );
 
   const isAnsarArea =
-    normalizedAreaName.startsWith(
-      "ansar"
+    normalizedAreaId.startsWith(
+      "ansar-"
     );
 
   const restrictedGroup:

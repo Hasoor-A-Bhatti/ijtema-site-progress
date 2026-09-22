@@ -68,22 +68,31 @@ async function getAreaCheck(
     };
   }
 
-  const normalizedName =
-    data.name
+  /*
+   * Restricted access is intentionally based on
+   * the stable area ID, NOT the display name.
+   *
+   * This allows map labels to be renamed for the
+   * Khuddam / Atfal layout without breaking the
+   * existing Lajna / Nasirat / Ansar task-access
+   * permissions or historical Supabase records.
+   */
+  const normalizedAreaId =
+    data.id
       .trim()
       .toLowerCase();
 
   const group:
     RestrictedGroup | null =
-    normalizedName.startsWith(
-      "lajna"
+    normalizedAreaId.startsWith(
+      "lajna-"
     ) ||
-    normalizedName.startsWith(
-      "nasirat"
+    normalizedAreaId.startsWith(
+      "nasirat-"
     )
       ? "lajna"
-      : normalizedName.startsWith(
-            "ansar"
+      : normalizedAreaId.startsWith(
+            "ansar-"
           )
         ? "ansar"
         : null;

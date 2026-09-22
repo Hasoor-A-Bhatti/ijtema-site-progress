@@ -22,7 +22,7 @@ export const infrastructureLines: SiteArea[] = [
   },
   {
     id: "lajna-gah-road-tracking",
-    name: "Lajna Gah Road",
+    name: "Gah Road",
     type: "metal_tracking",
     geometry: "line",
     points: "1834,591 1306,1590",
@@ -38,7 +38,7 @@ export const infrastructureLines: SiteArea[] = [
   },
   {
     id: "ansar-gah-road-tracking",
-    name: "Ansar Gah Road",
+    name: "Gah Road South",
     type: "metal_tracking",
     geometry: "line",
     points: "1287,1624 1008,2144",
@@ -90,7 +90,7 @@ export const infrastructureLines: SiteArea[] = [
    */
   {
     id: "lajna-activity-walk-rubber",
-    name: "Lajna Activity Walk",
+    name: "Activity Walk",
     type: "rubber_tracking",
     geometry: "line",
     points: "1641,580 1584,550 350,768 285,780",
@@ -98,7 +98,7 @@ export const infrastructureLines: SiteArea[] = [
   },
   {
     id: "lajna-gah-walk-rubber",
-    name: "Lajna Gah Walk",
+    name: "Gah Walk",
     type: "rubber_tracking",
     geometry: "line",
     points: "353,771 1271,1257",
@@ -106,7 +106,7 @@ export const infrastructureLines: SiteArea[] = [
   },
   {
     id: "lajna-field-walk-rubber",
-    name: "Lajna Field Walk",
+    name: "Field Walk",
     type: "rubber_tracking",
     geometry: "line",
     points: "932,671 1009,1115",
@@ -114,7 +114,7 @@ export const infrastructureLines: SiteArea[] = [
   },
   {
     id: "lajna-dining-walk-rubber",
-    name: "Lajna Dining Walk",
+    name: "Dining Walk",
     type: "rubber_tracking",
     geometry: "line",
     points: "1686,581 1651,563 1337,1150",
@@ -122,7 +122,7 @@ export const infrastructureLines: SiteArea[] = [
   },
   {
     id: "lajna-dining-walk-rear-rubber",
-    name: "Lajna Dining Walk Rear",
+    name: "Dining Walk Rear",
     type: "rubber_tracking",
     geometry: "line",
     points: "1402,1039 1529,1106 1730,726",
@@ -130,7 +130,7 @@ export const infrastructureLines: SiteArea[] = [
   },
   {
     id: "lajna-main-entrance-walk-rubber",
-    name: "Lajna Main Entrance Walk",
+    name: "Main Entrance Walk",
     type: "rubber_tracking",
     geometry: "line",
     points: "1378,1084 1449,1123",
@@ -146,7 +146,7 @@ export const infrastructureLines: SiteArea[] = [
   },
   {
     id: "ansar-gah-walk-rubber",
-    name: "Ansar Gah Walk",
+    name: "Gah Walk South",
     type: "rubber_tracking",
     geometry: "line",
     points: "135,1310 1001,1771",
@@ -154,7 +154,7 @@ export const infrastructureLines: SiteArea[] = [
   },
   {
     id: "ansar-field-walk-rubber",
-    name: "Ansar Field Walk",
+    name: "Field Walk South",
     type: "rubber_tracking",
     geometry: "line",
     points: "751,1642 571,1981",
@@ -162,7 +162,7 @@ export const infrastructureLines: SiteArea[] = [
   },
   {
     id: "ansar-dining-walk-rubber",
-    name: "Ansar Dining Walk",
+    name: "Dining Walk South",
     type: "rubber_tracking",
     geometry: "line",
     points: "349,1984 895,1984",
@@ -170,7 +170,7 @@ export const infrastructureLines: SiteArea[] = [
   },
   {
     id: "ansar-activity-walk-rubber",
-    name: "Ansar Activity Walk",
+    name: "Activity Walk South",
     type: "rubber_tracking",
     geometry: "line",
     points: "345,1428 344,1984",
@@ -178,7 +178,7 @@ export const infrastructureLines: SiteArea[] = [
   },
   {
     id: "ansar-toilet-2-walk-rubber",
-    name: "Ansar Toilet 2 Walk",
+    name: "Atfal Toilets Walk",
     type: "rubber_tracking",
     geometry: "line",
     points: "847,1987 847,2056",
@@ -186,7 +186,7 @@ export const infrastructureLines: SiteArea[] = [
   },
   {
     id: "ansar-entrance-walk-rubber",
-    name: "Ansar Entrance Walk",
+    name: "Atfal Entrance Walk",
     type: "rubber_tracking",
     geometry: "line",
     points: "895,1983 956,1870",
@@ -194,7 +194,7 @@ export const infrastructureLines: SiteArea[] = [
   },
   {
     id: "ansar-sports-field-walk-rubber",
-    name: "Ansar Sports Field Walk",
+    name: "Sports Field Walk",
     type: "rubber_tracking",
     geometry: "line",
     points: "372,1989 372,2255",
@@ -202,7 +202,7 @@ export const infrastructureLines: SiteArea[] = [
   },
   {
     id: "ansar-office-entrance-walk-rubber",
-    name: "Ansar Office/Entrance Walk",
+    name: "Atfal Office/Entrance Walk",
     type: "rubber_tracking",
     geometry: "line",
     points: "981,2128 981,2121 1078,1935",
@@ -214,7 +214,7 @@ export const infrastructureLines: SiteArea[] = [
    */
   {
     id: "lajna-bazaar-accom-fence",
-    name: "Lajna Bazaar/Accom Fence",
+    name: "Khuddam Bazaar/Accommodation Fence",
     type: "fence",
     geometry: "line",
     points: "412,585 422,663 404,667 411,706 428,702 436,736",
@@ -231,7 +231,7 @@ export const infrastructureLines: SiteArea[] = [
   },
   {
     id: "lajna-nasirat-dining-marquee-fence",
-    name: "Lajna/Nasirat Dining Marquee",
+    name: "Khuddam Dining Marquee Fence",
     type: "fence",
     geometry: "line",
     points: "1628,665 1723,716",
@@ -239,7 +239,7 @@ export const infrastructureLines: SiteArea[] = [
   },
   {
     id: "lajna-gah-road-fence",
-    name: "Lajna Gah Road Fence",
+    name: "Khuddam Gah Road Fence",
     type: "fence",
     geometry: "line",
     points: "1804,614 1748,718 1731,716 1748,718 1534,1120 1521,1113",
@@ -255,7 +255,7 @@ export const infrastructureLines: SiteArea[] = [
   },
   {
     id: "lajna-gah-vip-fence",
-    name: "Lajna Gah VIP Fence",
+    name: "Khuddam Gah VIP Fence",
     type: "fence",
     geometry: "line",
     points: "1389,1331 1370,1366 1351,1374 1360,1384 1351,1401 1326,1388 1368,1410",
@@ -263,7 +263,7 @@ export const infrastructureLines: SiteArea[] = [
   },
   {
     id: "lajna-gah-fence-1",
-    name: "Lajna Gah Fence 1",
+    name: "Khuddam Gah Fence 1",
     type: "fence",
     geometry: "line",
     points: "1408,1336 1302,1536 1288,1550 1132,1468",
@@ -271,7 +271,7 @@ export const infrastructureLines: SiteArea[] = [
   },
   {
     id: "lajna-gah-fence-2",
-    name: "Lajna Gah Fence 2",
+    name: "Khuddam Gah Fence 2",
     type: "fence",
     geometry: "line",
     points: "1059,1384 765,1227 774,1210",
@@ -279,7 +279,7 @@ export const infrastructureLines: SiteArea[] = [
   },
   {
     id: "lajna-toilets-fence",
-    name: "Lajna Toilets Fence",
+    name: "Khuddam Toilets Fence",
     type: "fence",
     geometry: "line",
     points: "837,1085 770,1051 805,1069 740,1191 496,1062 559,938 596,958",
@@ -287,7 +287,7 @@ export const infrastructureLines: SiteArea[] = [
   },
   {
     id: "lajna-bazaar-fence",
-    name: "Lajna Bazaar Fence",
+    name: "Khuddam Bazaar Fence",
     type: "fence",
     geometry: "line",
     points: "560,936 458,884 449,900 411,882 421,863 316,808 185,1053 431,1183 221,1072 185,1142",
@@ -295,7 +295,7 @@ export const infrastructureLines: SiteArea[] = [
   },
   {
     id: "ansar-bazaar-water-tank-fence",
-    name: "Ansar Bazaar/WaterTank Fence",
+    name: "Atfal Bazaar/Water Tank Fence",
     type: "fence",
     geometry: "line",
     points: "548,1089 455,1264 483,1212 430,1184 394,1253 184,1143 119,1265 171,1293",
@@ -303,7 +303,7 @@ export const infrastructureLines: SiteArea[] = [
   },
   {
     id: "ansar-toilets-fence",
-    name: "Ansar Toilets Fence",
+    name: "Atfal Toilets Fence",
     type: "fence",
     geometry: "line",
     points: "682,1384 456,1264 390,1386 616,1506 583,1488 648,1366",
@@ -319,7 +319,7 @@ export const infrastructureLines: SiteArea[] = [
   },
   {
     id: "ansar-gah-road-fence",
-    name: "Ansar Gah Road Fence",
+    name: "Atfal Gah Road Fence",
     type: "fence",
     geometry: "line",
     points: "1303,1535 1071,1972 1053,1980 1037,1976",
@@ -327,7 +327,7 @@ export const infrastructureLines: SiteArea[] = [
   },
   {
     id: "ansar-gah-vip-fence",
-    name: "Ansar Gah VIP Fence",
+    name: "Atfal Gah VIP Fence",
     type: "fence",
     geometry: "line",
     points: "1108,1817 1125,1826 1144,1791 1162,1756 1136,1742 1180,1765",
@@ -335,7 +335,7 @@ export const infrastructureLines: SiteArea[] = [
   },
   {
     id: "ansar-office-fence",
-    name: "Ansar Office Fence",
+    name: "Atfal Office Fence",
     type: "fence",
     geometry: "line",
     points: "1009,2023 1020,2027 1033,2041 996,2112 1015,2076 995,2073 984,2068",
@@ -367,7 +367,7 @@ export const infrastructureLines: SiteArea[] = [
   },
   {
     id: "lajna-funfair-fence",
-    name: "Lajna Funfair Fence",
+    name: "Tent City Fence",
     type: "fence",
     geometry: "line",
     points: "414,585 239,616 222,625 135,780 275,855",
