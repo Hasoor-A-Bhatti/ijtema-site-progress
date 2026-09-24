@@ -181,7 +181,7 @@ function MapModeControl({
         aria-pressed={
           mapMode === "2d"
         }
-        className={`h-9 rounded-lg px-3 text-xs font-semibold transition sm:h-10 sm:px-4 sm:text-sm ${
+        className={`h-9 rounded-lg px-2 text-[11px] font-semibold transition sm:h-10 sm:px-4 sm:text-sm ${
           mapMode === "2d"
             ? "bg-white text-slate-950 shadow-sm"
             : "text-slate-500 hover:text-slate-800"
@@ -200,7 +200,7 @@ function MapModeControl({
         aria-pressed={
           mapMode === "3d"
         }
-        className={`h-9 rounded-lg px-3 text-xs font-semibold transition sm:h-10 sm:px-4 sm:text-sm ${
+        className={`h-9 rounded-lg px-2 text-[11px] font-semibold transition sm:h-10 sm:px-4 sm:text-sm ${
           mapMode === "3d"
             ? "bg-slate-950 text-white shadow-sm"
             : "text-slate-500 hover:text-slate-800"
@@ -242,11 +242,11 @@ export default function MapToolbar({
 
   return (
     <div className="z-30 shrink-0 border-b border-slate-200 bg-white px-3 py-3 sm:px-4">
-      <div className="flex min-w-0 flex-col gap-2 lg:flex-row lg:items-center lg:gap-3">
+      <div className="flex min-w-0 items-center gap-2 lg:gap-3">
         {is2D ? (
           <>
             {/* LEFT: ZOOM CONTROLS */}
-            <div className="flex w-full shrink-0 items-center gap-2 lg:w-auto">
+            <div className="hidden shrink-0 items-center gap-2 lg:flex">
               <button
                 type="button"
                 onClick={() =>
@@ -290,20 +290,10 @@ export default function MapToolbar({
                 Reset
               </button>
 
-              <div className="ml-auto lg:hidden">
-                <MapModeControl
-                  mapMode={
-                    mapMode
-                  }
-                  onMapModeChange={
-                    onMapModeChange
-                  }
-                />
-              </div>
             </div>
 
             {/* CENTRE: MAP FILTERS */}
-            <div className="w-full min-w-0 flex-1">
+            <div className="w-[76%] min-w-0 lg:w-auto lg:flex-1">
               <div className="w-full overflow-x-auto rounded-2xl bg-slate-100 p-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 <div className="flex w-max snap-x snap-mandatory items-center gap-1">
                   {VIEW_OPTIONS.map(
@@ -350,6 +340,18 @@ export default function MapToolbar({
                   )}
                 </div>
               </div>
+            </div>
+
+            {/* MOBILE: ONLY 2D / 3D TOGGLE */}
+            <div className="flex w-[24%] shrink-0 justify-end lg:hidden">
+              <MapModeControl
+                mapMode={
+                  mapMode
+                }
+                onMapModeChange={
+                  onMapModeChange
+                }
+              />
             </div>
 
             {/* RIGHT: DESKTOP TRACE / DRAWING CONTROLS */}
@@ -538,134 +540,6 @@ export default function MapToolbar({
         )}
       </div>
 
-      {/* MOBILE TRACE CONTROLS */}
-      {is2D && (
-        <div className="mt-2 lg:hidden">
-          {!traceMode ? (
-            <button
-              type="button"
-              onClick={
-                onToggleTrace
-              }
-              disabled={
-                !onToggleTrace
-              }
-              className="h-10 w-full rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-40"
-            >
-              Trace / Draw
-            </button>
-          ) : null}
-        </div>
-      )}
-
-      {/* MOBILE TRACE ACTIONS */}
-      {is2D &&
-        traceMode && (
-          <div className="mt-2 grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-2 lg:hidden">
-            <div className="flex items-center rounded-xl bg-slate-100 p-1">
-              <button
-                type="button"
-                onClick={() =>
-                  onTraceGeometryChange?.(
-                    "area"
-                  )
-                }
-                className={`h-9 rounded-lg px-3 text-xs font-semibold transition ${
-                  traceGeometry ===
-                  "area"
-                    ? "bg-white text-slate-950 shadow-sm"
-                    : "text-slate-500"
-                }`}
-              >
-                Area
-              </button>
-
-              <button
-                type="button"
-                onClick={() =>
-                  onTraceGeometryChange?.(
-                    "line"
-                  )
-                }
-                className={`h-9 rounded-lg px-3 text-xs font-semibold transition ${
-                  traceGeometry ===
-                  "line"
-                    ? "bg-white text-slate-950 shadow-sm"
-                    : "text-slate-500"
-                }`}
-              >
-                Line
-              </button>
-            </div>
-
-            <span className="col-span-2 text-center text-xs font-medium text-slate-500">
-              {
-                pointsCount
-              }{" "}
-              point
-              {pointsCount ===
-              1
-                ? ""
-                : "s"}
-            </span>
-
-            <button
-              type="button"
-              onClick={
-                onUndo
-              }
-              disabled={
-                !onUndo ||
-                pointsCount === 0
-              }
-              className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 disabled:opacity-40"
-            >
-              Undo
-            </button>
-
-            <button
-              type="button"
-              onClick={
-                onClear
-              }
-              disabled={
-                !onClear ||
-                pointsCount === 0
-              }
-              className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 disabled:opacity-40"
-            >
-              Clear
-            </button>
-
-            <button
-              type="button"
-              onClick={
-                onToggleTrace
-              }
-              className="h-10 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white shadow-sm"
-            >
-              Finish
-            </button>
-
-            <button
-              type="button"
-              onClick={
-                onCopy
-              }
-              disabled={
-                !onCopy ||
-                pointsCount === 0
-              }
-              className="h-10 rounded-lg bg-slate-950 px-3 text-xs font-semibold text-white disabled:opacity-40"
-            >
-              Copy{" "}
-              {traceGeometry ===
-              "line"
-                ? "Line"
-                : "Area"}
-            </button>
-          </div>
-        )}
     </div>
   );
 }
