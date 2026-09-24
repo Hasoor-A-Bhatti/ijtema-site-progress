@@ -136,7 +136,7 @@ function FilterButton({
       aria-pressed={
         active
       }
-      className={`min-h-12 shrink-0 rounded-xl px-5 text-sm font-medium transition ${
+      className={`min-h-10 shrink-0 snap-start rounded-xl px-3 text-xs font-semibold transition sm:min-h-12 sm:px-5 sm:text-sm ${
         active
           ? option.activeClass
           : "text-slate-500 hover:bg-white/60 hover:text-slate-800"
@@ -181,7 +181,7 @@ function MapModeControl({
         aria-pressed={
           mapMode === "2d"
         }
-        className={`h-10 rounded-lg px-4 text-sm font-semibold transition ${
+        className={`h-9 rounded-lg px-3 text-xs font-semibold transition sm:h-10 sm:px-4 sm:text-sm ${
           mapMode === "2d"
             ? "bg-white text-slate-950 shadow-sm"
             : "text-slate-500 hover:text-slate-800"
@@ -200,7 +200,7 @@ function MapModeControl({
         aria-pressed={
           mapMode === "3d"
         }
-        className={`h-10 rounded-lg px-4 text-sm font-semibold transition ${
+        className={`h-9 rounded-lg px-3 text-xs font-semibold transition sm:h-10 sm:px-4 sm:text-sm ${
           mapMode === "3d"
             ? "bg-slate-950 text-white shadow-sm"
             : "text-slate-500 hover:text-slate-800"
@@ -242,11 +242,11 @@ export default function MapToolbar({
 
   return (
     <div className="z-30 shrink-0 border-b border-slate-200 bg-white px-3 py-3 sm:px-4">
-      <div className="flex min-w-0 items-center gap-3">
+      <div className="flex min-w-0 flex-col gap-2 lg:flex-row lg:items-center lg:gap-3">
         {is2D ? (
           <>
             {/* LEFT: ZOOM CONTROLS */}
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex w-full shrink-0 items-center gap-2 lg:w-auto">
               <button
                 type="button"
                 onClick={() =>
@@ -257,7 +257,7 @@ export default function MapToolbar({
                 }
                 aria-label="Zoom out"
                 title="Zoom out"
-                className="flex h-12 w-12 items-center justify-center rounded-xl border border-slate-300 bg-white text-xl font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-300 bg-white text-lg font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 sm:h-12 sm:w-12 sm:text-xl"
               >
                 −
               </button>
@@ -272,7 +272,7 @@ export default function MapToolbar({
                 }
                 aria-label="Zoom in"
                 title="Zoom in"
-                className="flex h-12 w-12 items-center justify-center rounded-xl border border-slate-300 bg-white text-xl font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-300 bg-white text-lg font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 sm:h-12 sm:w-12 sm:text-xl"
               >
                 +
               </button>
@@ -285,16 +285,27 @@ export default function MapToolbar({
                 disabled={
                   !onReset
                 }
-                className="h-12 rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                className="h-10 rounded-xl border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 sm:h-12 sm:px-4 sm:text-sm"
               >
                 Reset
               </button>
+
+              <div className="ml-auto lg:hidden">
+                <MapModeControl
+                  mapMode={
+                    mapMode
+                  }
+                  onMapModeChange={
+                    onMapModeChange
+                  }
+                />
+              </div>
             </div>
 
             {/* CENTRE: MAP FILTERS */}
-            <div className="min-w-0 flex-1">
-              <div className="mx-auto w-fit max-w-full overflow-x-auto rounded-2xl bg-slate-100 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                <div className="flex w-max items-center">
+            <div className="w-full min-w-0 flex-1">
+              <div className="w-full overflow-x-auto rounded-2xl bg-slate-100 p-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <div className="flex w-max snap-x snap-mandatory items-center gap-1">
                   {VIEW_OPTIONS.map(
                     (
                       option
@@ -331,7 +342,7 @@ export default function MapToolbar({
                       onClick={
                         onAmoomiLock
                       }
-                      className="min-h-12 shrink-0 rounded-xl border border-amber-400 bg-slate-950 px-4 text-sm font-semibold text-amber-300 shadow-sm transition hover:bg-black"
+                      className="min-h-10 shrink-0 snap-start rounded-xl border border-amber-400 bg-slate-950 px-3 text-xs font-semibold text-amber-300 shadow-sm transition hover:bg-black sm:min-h-12 sm:px-4 sm:text-sm"
                       title="Sign out and lock Amoomi"
                     >
                       Lock Amoomi
@@ -341,10 +352,10 @@ export default function MapToolbar({
               </div>
             </div>
 
-            {/* RIGHT: TRACE / DRAWING CONTROLS */}
-            <div className="flex shrink-0 items-center gap-2">
+            {/* RIGHT: DESKTOP TRACE / DRAWING CONTROLS */}
+            <div className="hidden shrink-0 items-center gap-2 lg:flex">
               {traceMode && (
-                <div className="hidden items-center rounded-xl bg-slate-100 p-1 lg:flex">
+                <div className="col-span-2 grid grid-cols-2 rounded-xl bg-slate-100 p-1">
                   <button
                     type="button"
                     onClick={() =>
@@ -469,8 +480,8 @@ export default function MapToolbar({
               </div>
             </div>
 
-            <div className="flex shrink-0 items-center gap-2">
-              <div className="flex items-center rounded-xl border border-slate-200 bg-slate-100 p-1 shadow-sm">
+            <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:flex-nowrap">
+              <div className="flex flex-1 items-center rounded-xl border border-slate-200 bg-slate-100 p-1 shadow-sm lg:flex-none">
                 <button
                   type="button"
                   onClick={() =>
@@ -527,10 +538,30 @@ export default function MapToolbar({
         )}
       </div>
 
+      {/* MOBILE TRACE CONTROLS */}
+      {is2D && (
+        <div className="mt-2 lg:hidden">
+          {!traceMode ? (
+            <button
+              type="button"
+              onClick={
+                onToggleTrace
+              }
+              disabled={
+                !onToggleTrace
+              }
+              className="h-10 w-full rounded-xl bg-slate-950 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-40"
+            >
+              Trace / Draw
+            </button>
+          ) : null}
+        </div>
+      )}
+
       {/* MOBILE TRACE ACTIONS */}
       {is2D &&
         traceMode && (
-          <div className="mt-2 flex items-center gap-2 overflow-x-auto lg:hidden">
+          <div className="mt-2 grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-2 lg:hidden">
             <div className="flex items-center rounded-xl bg-slate-100 p-1">
               <button
                 type="button"
@@ -567,7 +598,7 @@ export default function MapToolbar({
               </button>
             </div>
 
-            <span className="shrink-0 text-xs font-medium text-slate-500">
+            <span className="col-span-2 text-center text-xs font-medium text-slate-500">
               {
                 pointsCount
               }{" "}
@@ -587,7 +618,7 @@ export default function MapToolbar({
                 !onUndo ||
                 pointsCount === 0
               }
-              className="h-9 shrink-0 rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-600 disabled:opacity-40"
+              className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 disabled:opacity-40"
             >
               Undo
             </button>
@@ -601,9 +632,19 @@ export default function MapToolbar({
                 !onClear ||
                 pointsCount === 0
               }
-              className="h-9 shrink-0 rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-600 disabled:opacity-40"
+              className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 disabled:opacity-40"
             >
               Clear
+            </button>
+
+            <button
+              type="button"
+              onClick={
+                onToggleTrace
+              }
+              className="h-10 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white shadow-sm"
+            >
+              Finish
             </button>
 
             <button
@@ -615,7 +656,7 @@ export default function MapToolbar({
                 !onCopy ||
                 pointsCount === 0
               }
-              className="h-9 shrink-0 rounded-lg bg-slate-950 px-3 text-xs font-semibold text-white disabled:opacity-40"
+              className="h-10 rounded-lg bg-slate-950 px-3 text-xs font-semibold text-white disabled:opacity-40"
             >
               Copy{" "}
               {traceGeometry ===

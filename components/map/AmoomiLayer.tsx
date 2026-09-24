@@ -240,21 +240,21 @@ export function AmoomiLayer({
                   cy={y}
                   r={22}
                   fill="none"
-                  stroke="#DC2626"
-                  strokeWidth={7}
+                  stroke="#7F1D1D"
+                  strokeWidth={9}
                   opacity={0}
                   pointerEvents="none"
                 >
                   <animate
                     attributeName="r"
-                    values="18;52"
-                    dur="0.85s"
+                    values="18;64"
+                    dur="0.72s"
                     repeatCount="indefinite"
                   />
                   <animate
                     attributeName="opacity"
                     values="1;0"
-                    dur="0.85s"
+                    dur="0.72s"
                     repeatCount="indefinite"
                   />
                 </circle>
@@ -264,23 +264,23 @@ export function AmoomiLayer({
                   cy={y}
                   r={20}
                   fill="none"
-                  stroke="#F59E0B"
-                  strokeWidth={5}
+                  stroke="#450A0A"
+                  strokeWidth={7}
                   opacity={0}
                   pointerEvents="none"
                 >
                   <animate
                     attributeName="r"
-                    values="20;46"
+                    values="22;58"
                     dur="0.85s"
-                    begin="0.42s"
+                    begin="0.30s"
                     repeatCount="indefinite"
                   />
                   <animate
                     attributeName="opacity"
                     values="0.95;0"
                     dur="0.85s"
-                    begin="0.42s"
+                    begin="0.30s"
                     repeatCount="indefinite"
                   />
                 </circle>
@@ -289,20 +289,20 @@ export function AmoomiLayer({
                   cx={x}
                   cy={y}
                   r={19}
-                  fill="#EF4444"
-                  opacity={0.28}
+                  fill="#7F1D1D"
+                  opacity={0.38}
                   pointerEvents="none"
                 >
                   <animate
                     attributeName="r"
-                    values="18;25;18"
-                    dur="0.75s"
+                    values="17;29;17"
+                    dur="0.65s"
                     repeatCount="indefinite"
                   />
                   <animate
                     attributeName="opacity"
-                    values="0.45;0.12;0.45"
-                    dur="0.75s"
+                    values="0.65;0.12;0.65"
+                    dur="0.65s"
                     repeatCount="indefinite"
                   />
                 </circle>
@@ -312,14 +312,14 @@ export function AmoomiLayer({
                   y={markerY - 13}
                   textAnchor="middle"
                   dominantBaseline="central"
-                  fill="#B91C1C"
-                  fontSize={15}
+                  fill="#450A0A"
+                  fontSize={17}
                   fontWeight="900"
                   pointerEvents="none"
                   style={{
                     paintOrder: "stroke",
                     stroke: "white",
-                    strokeWidth: 5,
+                    strokeWidth: 6,
                     strokeLinejoin: "round",
                   }}
                 >
@@ -632,7 +632,7 @@ export function AmoomiAccessModal({
           />
 
           {error && (
-            <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-medium text-red-700">
+            <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-medium text-red-950">
               {error}
             </div>
           )}
@@ -895,8 +895,8 @@ export function AmoomiPostCard({
   }
 
   return (
-    <div className="fixed right-4 top-24 z-[80] flex max-h-[calc(100dvh-7rem)] w-[min(430px,calc(100vw-2rem))] flex-col overflow-hidden rounded-3xl border border-amber-300 bg-white shadow-2xl">
-      <div className="border-b border-slate-200 bg-gradient-to-r from-slate-950 to-amber-500 px-5 py-4 text-white">
+    <div className="fixed inset-x-2 bottom-2 z-[80] flex max-h-[78dvh] flex-col overflow-hidden rounded-3xl border border-amber-300 bg-white shadow-2xl sm:inset-x-auto sm:bottom-auto sm:right-4 sm:top-24 sm:max-h-[calc(100dvh-7rem)] sm:w-[min(430px,calc(100vw-2rem))]">
+      <div className="border-b border-slate-200 bg-gradient-to-r from-slate-950 to-amber-500 px-4 py-3 text-white sm:px-5 sm:py-4">
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="flex flex-wrap items-center gap-2">
@@ -973,7 +973,7 @@ export function AmoomiPostCard({
         )}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+      <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
         {error && (
           <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-medium text-red-700">
             {error}
@@ -1387,7 +1387,7 @@ export function AmoomiPostCard({
                 <button
                   type="submit"
                   disabled={busy}
-                  className="mt-3 h-12 w-full animate-pulse rounded-xl bg-red-600 px-4 text-sm font-black uppercase tracking-wider text-white shadow-lg shadow-red-500/30 transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="mt-3 h-12 w-full animate-pulse rounded-xl bg-red-950 px-4 text-sm font-black uppercase tracking-wider text-white shadow-xl shadow-red-950/40 ring-2 ring-red-700 transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Raise Security Breach
                 </button>
