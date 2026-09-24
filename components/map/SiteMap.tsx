@@ -845,11 +845,12 @@ export default function SiteMap() {
       setTraceMode(false);
       setPoints([]);
       setSelectedTowerLightId(null);
-      setSelectedAmoomiPostId(null);
 
-      if (mapView === "amoomi") {
-        setMapView("all");
-      }
+      /*
+       * Keep the Amoomi layer state while switching to 3D.
+       * If Amoomi is unlocked, its security-post bases remain
+       * available in the 3D scene and the same post card can open.
+       */
     }
   }
 
@@ -1330,6 +1331,22 @@ export default function SiteMap() {
               }
               generators={generators}
               lights={towerLights}
+              amoomiPosts={
+                amoomiAuthorised
+                  ? amoomiPosts
+                  : []
+              }
+              selectedAmoomiPostId={
+                selectedAmoomiPostId
+              }
+              hideAmoomiLabels={
+                Boolean(
+                  selectedAmoomiPostId ||
+                  selectedFeatureId ||
+                  selectedGeneratorId ||
+                  selectedTowerLightId
+                )
+              }
               selectedAreaId={
                 selectedFeatureId
               }
@@ -1348,6 +1365,9 @@ export default function SiteMap() {
                 setSelectedTowerLightId(
                   null
                 );
+                setSelectedAmoomiPostId(
+                  null
+                );
                 setSelectedFeatureId(
                   featureId
                 );
@@ -1359,6 +1379,9 @@ export default function SiteMap() {
                   null
                 );
                 setSelectedTowerLightId(
+                  null
+                );
+                setSelectedAmoomiPostId(
                   null
                 );
                 setSelectedGeneratorId(
@@ -1374,8 +1397,27 @@ export default function SiteMap() {
                 setSelectedGeneratorId(
                   null
                 );
+                setSelectedAmoomiPostId(
+                  null
+                );
                 setSelectedTowerLightId(
                   lightId
+                );
+              }}
+              onSelectAmoomiPost={(
+                postId
+              ) => {
+                setSelectedFeatureId(
+                  null
+                );
+                setSelectedGeneratorId(
+                  null
+                );
+                setSelectedTowerLightId(
+                  null
+                );
+                setSelectedAmoomiPostId(
+                  postId
                 );
               }}
             />
@@ -1443,7 +1485,8 @@ export default function SiteMap() {
         }}
       />
 
-      {mapView === "amoomi" &&
+      {(mapView === "amoomi" ||
+        mapMode === "3d") &&
         selectedAmoomiPost &&
         amoomiRole && (
         <AmoomiPostCard

@@ -18,8 +18,8 @@ interface TowerLight3DProps {
 
 const MAP_SCALE = 0.02;
 
-const MAST_HEIGHT = 3.4;
-const BASE_HEIGHT = 0.28;
+const MAST_HEIGHT = 3.5;
+const BASE_HEIGHT = 0.15;
 
 const MAST_COLOUR = "#374151";
 const BASE_COLOUR = "#1F2937";

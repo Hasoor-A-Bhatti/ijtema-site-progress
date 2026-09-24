@@ -14,6 +14,7 @@ import {
   Stars,
 } from "@react-three/drei";
 
+import AmoomiPost3D from "@/components/map/three/AmoomiPost3D";
 import Generator3D from "@/components/map/three/Generator3D";
 import Infrastructure3D from "@/components/map/three/Infrastructure3D";
 import Marquee3D from "@/components/map/three/Marquee3D";
@@ -24,6 +25,7 @@ import TowerLight3D from "@/components/map/three/TowerLight3D";
 import { infrastructureLines } from "@/data/infrastructureLines";
 import { siteAreas } from "@/data/siteAreas";
 
+import type { AmoomiPost } from "@/components/map/AmoomiLayer";
 import type { SiteGenerator } from "@/types/generators";
 import type { SiteStatus } from "@/types/site";
 import type { SiteTowerLight } from "@/types/towerLights";
@@ -44,12 +46,16 @@ interface Site3DMapProps {
   urgentTaskCounts?: Record<string, number>;
   generators?: SiteGenerator[];
   lights?: SiteTowerLight[];
+  amoomiPosts?: AmoomiPost[];
+  selectedAmoomiPostId?: string | null;
+  hideAmoomiLabels?: boolean;
   selectedAreaId?: string | null;
   selectedGeneratorId?: string | null;
   selectedLightId?: string | null;
   onSelectArea?: (areaId: string) => void;
   onSelectGenerator?: (generatorId: string) => void;
   onSelectLight?: (lightId: string) => void;
+  onSelectAmoomiPost?: (postId: string) => void;
 }
 
 const MARQUEES = siteAreas.filter(
@@ -83,12 +89,16 @@ export default function Site3DMap({
   urgentTaskCounts,
   generators = [],
   lights = [],
+  amoomiPosts = [],
+  selectedAmoomiPostId = null,
+  hideAmoomiLabels = false,
   selectedAreaId: controlledSelectedAreaId,
   selectedGeneratorId: controlledSelectedGeneratorId,
   selectedLightId: controlledSelectedLightId,
   onSelectArea,
   onSelectGenerator,
   onSelectLight,
+  onSelectAmoomiPost,
 }: Site3DMapProps) {
   const [
     navigationMode,
@@ -317,22 +327,67 @@ export default function Site3DMap({
 
         {isNight && (
           <>
-            {/*
-             * Keep a low-level cool fill so the whole site remains
-             * readable at night, but let ON tower lights provide the
-             * meaningful local illumination. This makes dark gaps
-             * between coverage zones easy to identify.
-             */}
+            {/* Broad site illumination — warm flood lighting without
+                flattening the night-time atmosphere. */}
+            <pointLight
+              position={[
+                mapCentre.x - 14,
+                12,
+                mapCentre.z - 16,
+              ]}
+              intensity={78}
+              distance={34}
+              decay={2}
+              color="#FFD58A"
+            />
+
+            <pointLight
+              position={[
+                mapCentre.x + 13,
+                13,
+                mapCentre.z - 2,
+              ]}
+              intensity={86}
+              distance={36}
+              decay={2}
+              color="#FFE2A8"
+            />
+
+            <pointLight
+              position={[
+                mapCentre.x - 11,
+                12,
+                mapCentre.z + 17,
+              ]}
+              intensity={74}
+              distance={33}
+              decay={2}
+              color="#FFD08A"
+            />
+
+            <pointLight
+              position={[
+                mapCentre.x + 14,
+                12,
+                mapCentre.z + 24,
+              ]}
+              intensity={72}
+              distance={32}
+              decay={2}
+              color="#FFE0A0"
+            />
+
+            {/* A very soft cool fill keeps distant structures readable. */}
             <pointLight
               position={[
                 mapCentre.x,
-                30,
+                28,
                 mapCentre.z,
               ]}
-              intensity={24}
-              distance={78}
+              intensity={62}
+              distance={72}
               decay={2}
-              color="#5F8FD8"
+              color="#6EA8FF"
             />
           </>
         )}
@@ -483,9 +538,24 @@ export default function Site3DMap({
               <TowerLight3D
                 key={light.id}
                 light={light}
-                sceneMode={sceneMode}
                 selected={selectedLightId === light.id}
                 onSelect={handleSelectLight}
+              />
+            ))}
+
+            {amoomiPosts.map((post) => (
+              <AmoomiPost3D
+                key={post.id}
+                post={post}
+                selected={
+                  selectedAmoomiPostId === post.id
+                }
+                hideLabels={
+                  hideAmoomiLabels
+                }
+                onSelect={
+                  onSelectAmoomiPost
+                }
               />
             ))}
 
