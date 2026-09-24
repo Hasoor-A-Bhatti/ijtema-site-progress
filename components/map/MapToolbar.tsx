@@ -293,7 +293,7 @@ export default function MapToolbar({
             </div>
 
             {/* CENTRE: MAP FILTERS */}
-            <div className="w-[76%] min-w-0 lg:w-auto lg:flex-1">
+            <div className="w-[70%] min-w-0 lg:w-auto lg:flex-1">
               <div className="w-full overflow-x-auto rounded-2xl bg-slate-100 p-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 <div className="flex w-max snap-x snap-mandatory items-center gap-1">
                   {VIEW_OPTIONS.map(
@@ -343,7 +343,7 @@ export default function MapToolbar({
             </div>
 
             {/* MOBILE: ONLY 2D / 3D TOGGLE */}
-            <div className="flex w-[24%] shrink-0 justify-end lg:hidden">
+            <div className="flex w-[20%] shrink-0 justify-end lg:hidden">
               <MapModeControl
                 mapMode={
                   mapMode
