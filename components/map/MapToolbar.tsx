@@ -343,7 +343,7 @@ export default function MapToolbar({
             </div>
 
             {/* MOBILE: ONLY 2D / 3D TOGGLE */}
-            <div className="flex w-[20%] shrink-0 justify-end lg:hidden">
+            <div className="flex w-[30%] shrink-0 justify-end lg:hidden">
               <MapModeControl
                 mapMode={
                   mapMode
