@@ -1047,10 +1047,10 @@ export default function UrgentTasksList({
   const accessLabel =
     restrictedGroup ===
     "lajna"
-      ? "Lajna"
+      ? "Khuddam"
       : restrictedGroup ===
           "ansar"
-        ? "Ansar"
+        ? "Atfal"
         : null;
 
   const accent =

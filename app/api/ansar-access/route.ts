@@ -32,7 +32,7 @@ export interface AnsarTaskSession {
 }
 
 /*
- * Two restricted Ansar task accounts.
+ * Two restricted Atfal task accounts.
  *
  * Each account has its own registered
  * phone number so the correct reporter
@@ -41,7 +41,7 @@ export interface AnsarTaskSession {
 const USERS: TaskUser[] = [
   {
     username:
-      "AnsarSite1",
+      "AtfalSite1",
     password:
       "AnsarTask2026A!",
     phone:
@@ -69,7 +69,7 @@ function getSecret() {
     secret.length < 24
   ) {
     throw new Error(
-      "Ansar task session secret is missing or too short. Add ANSAR_TASK_SESSION_SECRET (recommended) or ensure EDITOR_SESSION_SECRET is configured."
+      "Atfal task session secret is missing or too short. Add ANSAR_TASK_SESSION_SECRET (recommended) or ensure EDITOR_SESSION_SECRET is configured."
     );
   }
 

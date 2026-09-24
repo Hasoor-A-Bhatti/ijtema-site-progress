@@ -5,7 +5,8 @@ export type MapView =
   | "marquees"
   | "tracking"
   | "fence"
-  | "power";
+  | "power"
+  | "amoomi";
 
 export type TraceGeometry =
   | "area"
@@ -29,6 +30,9 @@ interface MapToolbarProps {
   onSceneModeChange?:
     (mode: SceneMode) =>
       void;
+
+  amoomiAuthorised?: boolean;
+  onAmoomiLock?: () => void;
 
   traceMode?: boolean;
   traceGeometry?:
@@ -101,12 +105,19 @@ const VIEW_OPTIONS:
       activeClass:
         "bg-gradient-to-r from-red-600 to-amber-400 text-white shadow-sm",
     },
+    {
+      value: "amoomi",
+      label: "Amoomi",
+      activeClass:
+        "bg-slate-950 text-amber-300 shadow-sm ring-1 ring-amber-400",
+    },
   ];
 
 function FilterButton({
   option,
   active,
   onClick,
+  locked = false,
 }: {
   option:
     ViewOption;
@@ -114,6 +125,7 @@ function FilterButton({
     boolean;
   onClick:
     () => void;
+  locked?: boolean;
 }) {
   return (
     <button
@@ -130,9 +142,20 @@ function FilterButton({
           : "text-slate-500 hover:bg-white/60 hover:text-slate-800"
       }`}
     >
-      {
-        option.label
-      }
+      <span className="inline-flex items-center gap-1.5">
+        {
+          option.label
+        }
+
+        {locked && (
+          <span
+            aria-hidden="true"
+            className="text-[11px]"
+          >
+            🔒
+          </span>
+        )}
+      </span>
     </button>
   );
 }
@@ -195,6 +218,9 @@ export default function MapToolbar({
 
   sceneMode = "day",
   onSceneModeChange,
+
+  amoomiAuthorised = false,
+  onAmoomiLock,
 
   traceMode = false,
   traceGeometry = "area",
@@ -289,8 +315,27 @@ export default function MapToolbar({
                             option.value
                           )
                         }
+                        locked={
+                          option.value ===
+                            "amoomi" &&
+                          !amoomiAuthorised
+                        }
                       />
                     )
+                  )}
+
+                  {amoomiAuthorised &&
+                    onAmoomiLock && (
+                    <button
+                      type="button"
+                      onClick={
+                        onAmoomiLock
+                      }
+                      className="min-h-12 shrink-0 rounded-xl border border-amber-400 bg-slate-950 px-4 text-sm font-semibold text-amber-300 shadow-sm transition hover:bg-black"
+                      title="Sign out and lock Amoomi"
+                    >
+                      Lock Amoomi
+                    </button>
                   )}
                 </div>
               </div>

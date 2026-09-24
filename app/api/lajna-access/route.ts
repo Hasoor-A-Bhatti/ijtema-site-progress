@@ -33,7 +33,7 @@ export interface LajnaTaskSession {
 }
 
 /*
- * Restricted Lajna task accounts.
+ * Restricted Khuddam task accounts.
  *
  * Each username is linked to its own phone number so that
  * completion SMS messages are returned to the correct user.
@@ -41,7 +41,7 @@ export interface LajnaTaskSession {
 const USERS: TaskUser[] = [
   {
     username:
-      "LajnaSite1",
+      "KhuddamSite1",
     password:
       "LajnaTask2026A!",
     phone:
@@ -69,7 +69,7 @@ function getSecret() {
     secret.length < 24
   ) {
     throw new Error(
-      "Lajna task session secret is missing or too short. Add LAJNA_TASK_SESSION_SECRET (recommended) or ensure EDITOR_SESSION_SECRET is configured."
+      "Khuddam task session secret is missing or too short. Add LAJNA_TASK_SESSION_SECRET (recommended) or ensure EDITOR_SESSION_SECRET is configured."
     );
   }
 

@@ -20,6 +20,16 @@ import MapToolbar from "@/components/map/MapToolbar";
 import SiteAreaLayer from "@/components/map/SiteAreaLayer";
 import TraceLayer from "@/components/map/TraceLayer";
 import TowerLightLayer from "@/components/map/TowerLightLayer";
+import {
+  AmoomiAccessModal,
+  AmoomiLayer,
+  AmoomiPostCard,
+} from "@/components/map/AmoomiLayer";
+import type {
+  AmoomiPost,
+  AmoomiRole,
+  RememberedAmoomiOfficer,
+} from "@/components/map/AmoomiLayer";
 import Site3DMap from "@/components/map/three/Site3DMap";
 
 import type { MapView } from "@/components/map/MapToolbar";
@@ -349,6 +359,33 @@ export default function SiteMap() {
     setSelectedTowerLightId,
   ] = useState<string | null>(null);
 
+  const [
+    amoomiRole,
+    setAmoomiRole,
+  ] = useState<AmoomiRole | null>(null);
+
+  const [
+    amoomiPosts,
+    setAmoomiPosts,
+  ] = useState<AmoomiPost[]>([]);
+
+  const [
+    rememberedAmoomiOfficers,
+    setRememberedAmoomiOfficers,
+  ] = useState<
+    RememberedAmoomiOfficer[]
+  >([]);
+
+  const [
+    selectedAmoomiPostId,
+    setSelectedAmoomiPostId,
+  ] = useState<string | null>(null);
+
+  const [
+    showAmoomiLogin,
+    setShowAmoomiLogin,
+  ] = useState(false);
+
   const urgentTaskCounts =
     useUrgentTaskCounts();
 
@@ -403,6 +440,106 @@ export default function SiteMap() {
       selectedTowerLightId,
     ]
   );
+
+  const selectedAmoomiPost = useMemo(
+    () =>
+      amoomiPosts.find(
+        (post) =>
+          post.id === selectedAmoomiPostId
+      ) ?? null,
+    [
+      amoomiPosts,
+      selectedAmoomiPostId,
+    ]
+  );
+
+  const amoomiAuthorised =
+    Boolean(amoomiRole);
+
+  async function loadAmoomi() {
+    try {
+      const response = await fetch(
+        "/api/amoomi",
+        {
+          cache: "no-store",
+        }
+      );
+
+      const data =
+        (await response
+          .json()
+          .catch(() => null)) as
+          | {
+              authorised?: boolean;
+              role?: AmoomiRole | null;
+              posts?: AmoomiPost[];
+              rememberedOfficers?:
+                RememberedAmoomiOfficer[];
+            }
+          | null;
+
+      if (
+        response.ok &&
+        data?.authorised &&
+        data.role
+      ) {
+        setAmoomiRole(data.role);
+        setAmoomiPosts(
+          data.posts ?? []
+        );
+
+        setRememberedAmoomiOfficers(
+          data.rememberedOfficers ?? []
+        );
+
+        return;
+      }
+
+      setAmoomiRole(null);
+      setAmoomiPosts([]);
+      setRememberedAmoomiOfficers([]);
+    } catch (error) {
+      console.error(
+        "Failed to load Amoomi access:",
+        error
+      );
+    }
+  }
+
+  useEffect(() => {
+    /*
+     * Defer the initial Amoomi session check until after the
+     * effect has finished. This avoids React's set-state-in-effect
+     * lint rule while preserving the same behaviour.
+     */
+    const timer = window.setTimeout(
+      () => {
+        void loadAmoomi();
+      },
+      0
+    );
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, []);
+
+  async function logoutAmoomi() {
+    try {
+      await fetch(
+        "/api/amoomi",
+        {
+          method: "DELETE",
+        }
+      );
+    } finally {
+      setAmoomiRole(null);
+      setAmoomiPosts([]);
+      setRememberedAmoomiOfficers([]);
+      setSelectedAmoomiPostId(null);
+      setMapView("all");
+    }
+  }
 
   /*
    * FILTER POLYGON AREAS
@@ -708,6 +845,11 @@ export default function SiteMap() {
       setTraceMode(false);
       setPoints([]);
       setSelectedTowerLightId(null);
+      setSelectedAmoomiPostId(null);
+
+      if (mapView === "amoomi") {
+        setMapView("all");
+      }
     }
   }
 
@@ -721,10 +863,19 @@ export default function SiteMap() {
   function changeMapView(
     nextView: MapView
   ) {
+    if (
+      nextView === "amoomi" &&
+      !amoomiAuthorised
+    ) {
+      setShowAmoomiLogin(true);
+      return;
+    }
+
     setMapView(nextView);
     setSelectedFeatureId(null);
     setSelectedGeneratorId(null);
     setSelectedTowerLightId(null);
+    setSelectedAmoomiPostId(null);
   }
 
   /*
@@ -737,6 +888,7 @@ export default function SiteMap() {
       setSelectedFeatureId(null);
       setSelectedGeneratorId(null);
       setSelectedTowerLightId(null);
+      setSelectedAmoomiPostId(null);
       return;
     }
 
@@ -885,6 +1037,12 @@ export default function SiteMap() {
                 traceMode={traceMode}
                 traceGeometry={traceGeometry}
                 mapView={mapView}
+                amoomiAuthorised={
+                  amoomiAuthorised
+                }
+                onAmoomiLock={
+                  logoutAmoomi
+                }
                 pointsCount={points.length}
                 onToggleTrace={toggleTraceMode}
                 onTraceGeometryChange={
@@ -975,6 +1133,9 @@ export default function SiteMap() {
                           setSelectedTowerLightId(
                             null
                           );
+                          setSelectedAmoomiPostId(
+                            null
+                          );
                           setSelectedFeatureId(
                             featureId
                           );
@@ -998,6 +1159,9 @@ export default function SiteMap() {
                             null
                           );
                           setSelectedTowerLightId(
+                            null
+                          );
+                          setSelectedAmoomiPostId(
                             null
                           );
                           setSelectedFeatureId(
@@ -1027,6 +1191,9 @@ export default function SiteMap() {
                           setSelectedTowerLightId(
                             null
                           );
+                          setSelectedAmoomiPostId(
+                            null
+                          );
                           setSelectedFeatureId(
                             featureId
                           );
@@ -1048,6 +1215,9 @@ export default function SiteMap() {
                               null
                             );
                             setSelectedTowerLightId(
+                              null
+                            );
+                            setSelectedAmoomiPostId(
                               null
                             );
                             setSelectedGeneratorId(
@@ -1074,8 +1244,38 @@ export default function SiteMap() {
                             setSelectedGeneratorId(
                               null
                             );
+                            setSelectedAmoomiPostId(
+                              null
+                            );
                             setSelectedTowerLightId(
                               lightId
+                            );
+                          }}
+                        />
+                      )}
+
+                      {mapView === "amoomi" &&
+                        amoomiAuthorised && (
+                        <AmoomiLayer
+                          posts={amoomiPosts}
+                          selectedPostId={
+                            selectedAmoomiPostId
+                          }
+                          traceMode={traceMode}
+                          onSelectPost={(
+                            postId
+                          ) => {
+                            setSelectedFeatureId(
+                              null
+                            );
+                            setSelectedGeneratorId(
+                              null
+                            );
+                            setSelectedTowerLightId(
+                              null
+                            );
+                            setSelectedAmoomiPostId(
+                              postId
                             );
                           }}
                         />
@@ -1107,6 +1307,12 @@ export default function SiteMap() {
             }
             onSceneModeChange={
               setSceneMode
+            }
+            amoomiAuthorised={
+              amoomiAuthorised
+            }
+            onAmoomiLock={
+              logoutAmoomi
             }
           />
 
@@ -1217,6 +1423,49 @@ export default function SiteMap() {
           onChanged={refreshTowerLights}
           onClose={() =>
             setSelectedTowerLightId(null)
+          }
+        />
+      )}
+
+      <AmoomiAccessModal
+        open={showAmoomiLogin}
+        onClose={() =>
+          setShowAmoomiLogin(false)
+        }
+        onAuthenticated={async (
+          role
+        ) => {
+          setAmoomiRole(role);
+          setShowAmoomiLogin(false);
+          setMapMode("2d");
+          setMapView("amoomi");
+          await loadAmoomi();
+        }}
+      />
+
+      {mapView === "amoomi" &&
+        selectedAmoomiPost &&
+        amoomiRole && (
+        <AmoomiPostCard
+          key={
+            selectedAmoomiPost.id
+          }
+          post={
+            selectedAmoomiPost
+          }
+          allPosts={
+            amoomiPosts
+          }
+          rememberedOfficers={
+            rememberedAmoomiOfficers
+          }
+          role={amoomiRole}
+          onChanged={loadAmoomi}
+          onLogout={logoutAmoomi}
+          onClose={() =>
+            setSelectedAmoomiPostId(
+              null
+            )
           }
         />
       )}

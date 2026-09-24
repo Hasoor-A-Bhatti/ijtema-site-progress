@@ -330,7 +330,7 @@ export async function POST(
         return NextResponse.json(
           {
             error:
-              "Lajna task access is required to raise urgent tasks within Lajna areas.",
+              "Khuddam task access is required to raise urgent tasks within Khuddam areas.",
           },
           {
             status: 401,
@@ -351,7 +351,7 @@ export async function POST(
         return NextResponse.json(
           {
             error:
-              "Ansar task access is required to raise urgent tasks within Ansar areas.",
+              "Atfal task access is required to raise urgent tasks within Atfal areas.",
           },
           {
             status: 401,
