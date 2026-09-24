@@ -138,7 +138,7 @@ async function loadPosts() {
       supabaseServer
         .from("amoomi_officers")
         .select(
-          "id, post_id, name, phone, active, deployed_at, updated_at"
+          "id, post_id, name, phone, active, is_shift_incharge, deployed_at, updated_at"
         )
         .order("updated_at", {
           ascending: false,
@@ -554,6 +554,7 @@ export async function POST(
           name,
           phone: phone || null,
           active: true,
+          is_shift_incharge: false,
         });
 
     if (result.error) {
@@ -576,6 +577,95 @@ export async function POST(
     });
   }
 
+  if (action === "setShiftIncharge") {
+    const officerId = clean(body.officerId);
+    const postId = clean(body.postId);
+
+    if (!officerId || !postId) {
+      return NextResponse.json(
+        { error: "Officer and post are required." },
+        { status: 400 }
+      );
+    }
+
+    const existing =
+      await supabaseServer
+        .from("amoomi_officers")
+        .select("id, name, post_id")
+        .eq("active", true)
+        .eq("is_shift_incharge", true)
+        .neq("id", officerId)
+        .limit(1);
+
+    if (existing.error) {
+      return NextResponse.json(
+        { error: "Could not check the current Shift Incharge." },
+        { status: 500 }
+      );
+    }
+
+    if ((existing.data ?? []).length > 0) {
+      return NextResponse.json(
+        {
+          error:
+            "A Shift Incharge is already deployed. Demote the current Shift Incharge before assigning another officer.",
+        },
+        { status: 409 }
+      );
+    }
+
+    const result =
+      await supabaseServer
+        .from("amoomi_officers")
+        .update({
+          is_shift_incharge: true,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", officerId)
+        .eq("post_id", postId)
+        .eq("active", true);
+
+    if (result.error) {
+      return NextResponse.json(
+        { error: "The Shift Incharge could not be set." },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ success: true });
+  }
+
+  if (action === "demoteShiftIncharge") {
+    const officerId = clean(body.officerId);
+
+    if (!officerId) {
+      return NextResponse.json(
+        { error: "Officer is required." },
+        { status: 400 }
+      );
+    }
+
+    const result =
+      await supabaseServer
+        .from("amoomi_officers")
+        .update({
+          is_shift_incharge: false,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", officerId)
+        .eq("active", true)
+        .eq("is_shift_incharge", true);
+
+    if (result.error) {
+      return NextResponse.json(
+        { error: "The Shift Incharge could not be demoted." },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ success: true });
+  }
+
   if (action === "removeOfficer") {
     const officerId =
       clean(body.officerId);
@@ -584,6 +674,21 @@ export async function POST(
       return NextResponse.json(
         { error: "Officer is required." },
         { status: 400 }
+      );
+    }
+
+    const currentOfficer =
+      await supabaseServer
+        .from("amoomi_officers")
+        .select("id, is_shift_incharge")
+        .eq("id", officerId)
+        .eq("active", true)
+        .maybeSingle();
+
+    if (currentOfficer.data?.is_shift_incharge) {
+      return NextResponse.json(
+        { error: "Demote the Shift Incharge before removing them from duty." },
+        { status: 409 }
       );
     }
 
@@ -639,7 +744,7 @@ export async function POST(
       await supabaseServer
         .from("amoomi_officers")
         .select(
-          "id, post_id, active"
+          "id, post_id, active, is_shift_incharge"
         )
         .eq("id", officerId)
         .maybeSingle();
@@ -655,6 +760,13 @@ export async function POST(
             "The active officer could not be found.",
         },
         { status: 404 }
+      );
+    }
+
+    if (lookup.data.is_shift_incharge) {
+      return NextResponse.json(
+        { error: "Demote the Shift Incharge before transferring them to another post." },
+        { status: 409 }
       );
     }
 

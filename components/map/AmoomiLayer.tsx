@@ -20,6 +20,7 @@ export interface AmoomiOfficer {
   name: string;
   phone: string | null;
   active: boolean;
+  is_shift_incharge: boolean;
   deployed_at: string;
   updated_at: string;
 }
@@ -176,6 +177,12 @@ export function AmoomiLayer({
           isResponsePost
             ? "#FACC15"
             : "#111827";
+
+        const hasShiftIncharge =
+          post.officers.some(
+            (officer) =>
+              officer.is_shift_incharge
+          );
 
         const markerSize =
           selected
@@ -409,6 +416,31 @@ export function AmoomiLayer({
                 post.name
               )}
             </text>
+
+            {hasShiftIncharge && (
+              <g pointerEvents="none">
+                <circle
+                  cx={markerX + 2}
+                  cy={markerY + 2}
+                  r={8.5}
+                  fill="#111111"
+                  stroke="#FACC15"
+                  strokeWidth={2}
+                  vectorEffect="non-scaling-stroke"
+                />
+                <text
+                  x={markerX + 2}
+                  y={markerY + 2.5}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  fill="#FACC15"
+                  fontSize={9}
+                  fontWeight="900"
+                >
+                  ♛
+                </text>
+              </g>
+            )}
 
             {post.officers.length > 0 && (
               <g pointerEvents="none">
@@ -850,6 +882,31 @@ export function AmoomiPostCard({
     setRememberedOfficerKey("");
   }
 
+  async function setShiftIncharge(
+    officerId: string
+  ) {
+    await action(
+      {
+        action: "setShiftIncharge",
+        officerId,
+        postId: post.id,
+      },
+      "Shift Incharge set."
+    );
+  }
+
+  async function demoteShiftIncharge(
+    officerId: string
+  ) {
+    await action(
+      {
+        action: "demoteShiftIncharge",
+        officerId,
+      },
+      "Shift Incharge demoted."
+    );
+  }
+
   async function submitUrgent(
     event:
       FormEvent<HTMLFormElement>
@@ -1015,25 +1072,105 @@ export function AmoomiPostCard({
                   (officer) => (
                     <div
                       key={officer.id}
-                      className="rounded-2xl border border-slate-200 bg-white px-4 py-3"
+                      className={`rounded-2xl border px-4 py-3 transition ${
+                        officer.is_shift_incharge
+                          ? "border-amber-400 bg-gradient-to-r from-slate-950 via-slate-900 to-amber-950 shadow-lg ring-1 ring-amber-300"
+                          : "border-slate-200 bg-white"
+                      }`}
                     >
                       <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-100 text-sm font-black text-amber-900">
+                        <div
+                          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-black ${
+                            officer.is_shift_incharge
+                              ? "border border-amber-300 bg-amber-400 text-slate-950"
+                              : "bg-amber-100 text-amber-900"
+                          }`}
+                        >
                           {officer.name
                             .trim()
                             .charAt(0)
                             .toUpperCase()}
                         </div>
 
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-slate-950">
+                        <div className="min-w-0 flex-1">
+                          {officer.is_shift_incharge && (
+                            <div className="mb-1 inline-flex rounded-full border border-amber-300/70 bg-amber-400/15 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.14em] text-amber-300">
+                              Shift Incharge
+                            </div>
+                          )}
+
+                          <p
+                            className={`truncate text-sm font-bold ${
+                              officer.is_shift_incharge
+                                ? "text-white"
+                                : "text-slate-950"
+                            }`}
+                          >
                             {officer.name}
                           </p>
-                          <p className="mt-0.5 text-xs text-slate-500">
+                          <p
+                            className={`mt-0.5 text-xs ${
+                              officer.is_shift_incharge
+                                ? "text-amber-100/80"
+                                : "text-slate-500"
+                            }`}
+                          >
                             {officer.phone ||
                               "No phone number"}
                           </p>
                         </div>
+
+                        {role === "admin" && (
+                          <div className="shrink-0">
+                            {officer.is_shift_incharge ? (
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() =>
+                                  void demoteShiftIncharge(
+                                    officer.id
+                                  )
+                                }
+                                className="rounded-lg border border-amber-300 bg-amber-400 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wide text-slate-950 transition hover:bg-amber-300 disabled:opacity-50"
+                              >
+                                Demote
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={
+                                  busy ||
+                                  allPosts.some(
+                                    (candidatePost) =>
+                                      candidatePost.officers.some(
+                                        (candidate) =>
+                                          candidate.is_shift_incharge
+                                      )
+                                  )
+                                }
+                                onClick={() =>
+                                  void setShiftIncharge(
+                                    officer.id
+                                  )
+                                }
+                                title={
+                                  allPosts.some(
+                                    (candidatePost) =>
+                                      candidatePost.officers.some(
+                                        (candidate) =>
+                                          candidate.is_shift_incharge
+                                      )
+                                  )
+                                    ? "A Shift Incharge is already deployed. Demote them first."
+                                    : "Set as Shift Incharge"
+                                }
+                                className="rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[10px] font-bold text-amber-950 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+                              >
+                                Set Incharge
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   )

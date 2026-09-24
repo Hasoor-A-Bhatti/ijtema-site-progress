@@ -35,10 +35,6 @@ interface SmsResult {
   error?: string | null;
 }
 
-type AccessGroup =
-  | "lajna"
-  | "ansar";
-
 function formatTaskDate(
   value?: string
 ) {
@@ -161,8 +157,8 @@ export default function UrgentTasksList({
     useState(false);
 
   const [
-    lajnaAccess,
-    setLajnaAccess,
+    khuddamAccess,
+    setKhuddamAccess,
   ] =
     useState<RestrictedTaskAccessState>({
       authorised: false,
@@ -170,35 +166,14 @@ export default function UrgentTasksList({
     });
 
   const [
-    ansarAccess,
-    setAnsarAccess,
-  ] =
-    useState<RestrictedTaskAccessState>({
-      authorised: false,
-      username: null,
-    });
-
-  const [
-    checkingLajna,
-    setCheckingLajna,
+    checkingKhuddam,
+    setCheckingKhuddam,
   ] =
     useState(false);
 
   const [
-    checkingAnsar,
-    setCheckingAnsar,
-  ] =
-    useState(false);
-
-  const [
-    showLajnaLogin,
-    setShowLajnaLogin,
-  ] =
-    useState(false);
-
-  const [
-    showAnsarLogin,
-    setShowAnsarLogin,
+    showKhuddamLogin,
+    setShowKhuddamLogin,
   ] =
     useState(false);
 
@@ -241,41 +216,31 @@ export default function UrgentTasksList({
       .trim()
       .toLowerCase();
 
-  const isLajnaArea =
+  /*
+   * One universal Khuddam task login now covers
+   * every restricted Khuddam / Atfal area.
+   *
+   * Stable legacy IDs are deliberately retained:
+   * lajna-/nasirat- = current Khuddam areas
+   * ansar-         = current Atfal areas
+   */
+  const isKhuddamTaskArea =
     normalizedAreaId.startsWith(
       "lajna-"
     ) ||
     normalizedAreaId.startsWith(
       "nasirat-"
-    );
-
-  const isAnsarArea =
+    ) ||
     normalizedAreaId.startsWith(
       "ansar-"
     );
 
-  const restrictedGroup:
-    AccessGroup | null =
-    isLajnaArea
-      ? "lajna"
-      : isAnsarArea
-        ? "ansar"
-        : null;
-
-  const activeRestrictedAccess =
-    restrictedGroup ===
-    "lajna"
-      ? lajnaAccess
-      : restrictedGroup ===
-          "ansar"
-        ? ansarAccess
-        : null;
-
   const canAddTask =
     canEdit ||
-    Boolean(
-      activeRestrictedAccess
-        ?.authorised
+    (
+      isKhuddamTaskArea &&
+      khuddamAccess
+        .authorised
     );
 
   const outstandingTasks =
@@ -390,7 +355,7 @@ export default function UrgentTasksList({
   useEffect(() => {
     if (
       canEdit ||
-      !isLajnaArea
+      !isKhuddamTaskArea
     ) {
       return;
     }
@@ -399,14 +364,14 @@ export default function UrgentTasksList({
       false;
 
     async function checkAccess() {
-      setCheckingLajna(
+      setCheckingKhuddam(
         true
       );
 
       try {
         const response =
           await fetch(
-            "/api/lajna-access",
+            "/api/khuddam-access",
             {
               cache:
                 "no-store",
@@ -426,7 +391,7 @@ export default function UrgentTasksList({
             | null;
 
         if (!cancelled) {
-          setLajnaAccess({
+          setKhuddamAccess({
             authorised:
               Boolean(
                 response.ok &&
@@ -439,14 +404,14 @@ export default function UrgentTasksList({
         }
       } catch {
         if (!cancelled) {
-          setLajnaAccess({
+          setKhuddamAccess({
             authorised: false,
             username: null,
           });
         }
       } finally {
         if (!cancelled) {
-          setCheckingLajna(
+          setCheckingKhuddam(
             false
           );
         }
@@ -461,84 +426,7 @@ export default function UrgentTasksList({
     };
   }, [
     canEdit,
-    isLajnaArea,
-  ]);
-
-  useEffect(() => {
-    if (
-      canEdit ||
-      !isAnsarArea
-    ) {
-      return;
-    }
-
-    let cancelled =
-      false;
-
-    async function checkAccess() {
-      setCheckingAnsar(
-        true
-      );
-
-      try {
-        const response =
-          await fetch(
-            "/api/ansar-access",
-            {
-              cache:
-                "no-store",
-            }
-          );
-
-        const data =
-          (await response
-            .json()
-            .catch(
-              () => null
-            )) as
-            | {
-                authorised?: boolean;
-                username?: string | null;
-              }
-            | null;
-
-        if (!cancelled) {
-          setAnsarAccess({
-            authorised:
-              Boolean(
-                response.ok &&
-                  data?.authorised
-              ),
-            username:
-              data?.username ??
-              null,
-          });
-        }
-      } catch {
-        if (!cancelled) {
-          setAnsarAccess({
-            authorised: false,
-            username: null,
-          });
-        }
-      } finally {
-        if (!cancelled) {
-          setCheckingAnsar(
-            false
-          );
-        }
-      }
-    }
-
-    void checkAccess();
-
-    return () => {
-      cancelled =
-        true;
-    };
-  }, [
-    canEdit,
-    isAnsarArea,
+    isKhuddamTaskArea,
   ]);
 
   function resetLoginForm() {
@@ -547,9 +435,8 @@ export default function UrgentTasksList({
     setLoginError(null);
   }
 
-  async function signInRestricted(
-    event: FormEvent<HTMLFormElement>,
-    group: AccessGroup
+  async function signInKhuddam(
+    event: FormEvent<HTMLFormElement>
   ) {
     event.preventDefault();
 
@@ -569,9 +456,7 @@ export default function UrgentTasksList({
     try {
       const response =
         await fetch(
-          group === "lajna"
-            ? "/api/lajna-access"
-            : "/api/ansar-access",
+          "/api/khuddam-access",
           {
             method: "POST",
             headers: {
@@ -594,7 +479,6 @@ export default function UrgentTasksList({
             () => null
           )) as
           | {
-              success?: boolean;
               authorised?: boolean;
               username?: string | null;
               error?: string;
@@ -611,39 +495,21 @@ export default function UrgentTasksList({
         );
       }
 
-      const access = {
+      setKhuddamAccess({
         authorised: true,
         username:
           data.username ??
           username.trim(),
-      };
+      });
 
-      if (
-        group === "lajna"
-      ) {
-        setLajnaAccess(
-          access
-        );
-        setShowLajnaLogin(
-          false
-        );
-      } else {
-        setAnsarAccess(
-          access
-        );
-        setShowAnsarLogin(
-          false
-        );
-      }
+      setShowKhuddamLogin(
+        false
+      );
 
       setPassword("");
+
       setNotice(
-        `${
-          group ===
-          "lajna"
-            ? "Lajna"
-            : "Ansar"
-        } urgent-task access enabled.`
+        "Khuddam task access enabled."
       );
     } catch (
       signInError
@@ -659,33 +525,24 @@ export default function UrgentTasksList({
     }
   }
 
-  async function signOutRestricted(
-    group: AccessGroup
-  ) {
+  async function signOutKhuddam() {
     try {
       await fetch(
-        group === "lajna"
-          ? "/api/lajna-access"
-          : "/api/ansar-access",
+        "/api/khuddam-access",
         {
           method:
             "DELETE",
         }
       );
     } finally {
-      if (
-        group === "lajna"
-      ) {
-        setLajnaAccess({
-          authorised: false,
-          username: null,
-        });
-      } else {
-        setAnsarAccess({
-          authorised: false,
-          username: null,
-        });
-      }
+      setKhuddamAccess({
+        authorised: false,
+        username: null,
+      });
+
+      setShowKhuddamLogin(
+        false
+      );
 
       resetLoginForm();
       setNotice(null);
@@ -1029,57 +886,29 @@ export default function UrgentTasksList({
   }
 
   const checkingRestrictedAccess =
-    (
-      isLajnaArea &&
-      checkingLajna
-    ) ||
-    (
-      isAnsarArea &&
-      checkingAnsar
-    );
+    isKhuddamTaskArea &&
+    checkingKhuddam;
 
   const restrictedAccessAuthorised =
-    Boolean(
-      activeRestrictedAccess
-        ?.authorised
-    );
+    isKhuddamTaskArea &&
+    khuddamAccess
+      .authorised;
 
   const accessLabel =
-    restrictedGroup ===
-    "lajna"
-      ? "Khuddam"
-      : restrictedGroup ===
-          "ansar"
-        ? "Atfal"
-        : null;
+    "Khuddam";
 
-  const accent =
-    restrictedGroup ===
-    "lajna"
-      ? {
-          border:
-            "border-pink-200",
-          soft:
-            "bg-pink-50",
-          text:
-            "text-pink-800",
-          button:
-            "bg-pink-600 hover:bg-pink-700",
-          ring:
-            "focus:border-pink-400 focus:ring-pink-100",
-        }
-      : {
-          border:
-            "border-blue-200",
-          soft:
-            "bg-blue-50",
-          text:
-            "text-blue-800",
-          button:
-            "bg-blue-600 hover:bg-blue-700",
-          ring:
-            "focus:border-blue-400 focus:ring-blue-100",
-        };
+  const accent = {
+    border:
+      "border-emerald-200",
+    soft:
+      "bg-emerald-50",
+    text:
+      "text-emerald-800",
+    button:
+      "bg-emerald-700 hover:bg-emerald-800",
+    ring:
+      "focus:border-emerald-400 focus:ring-emerald-100",
+  };
 
   return (
     <section className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -1151,8 +980,8 @@ export default function UrgentTasksList({
                 </div>
 
                 <p className="mt-0.5 truncate pl-4 text-[11px] text-slate-500">
-                  {activeRestrictedAccess
-                    ?.username ??
+                  {khuddamAccess
+                    .username ??
                     "Restricted user"}{" "}
                   · SMS notifications enabled
                 </p>
@@ -1161,11 +990,7 @@ export default function UrgentTasksList({
               <button
                 type="button"
                 onClick={() =>
-                  restrictedGroup
-                    ? void signOutRestricted(
-                        restrictedGroup
-                      )
-                    : undefined
+                  void signOutKhuddam()
                 }
                 className="shrink-0 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
               >
@@ -1306,16 +1131,11 @@ export default function UrgentTasksList({
 
         {/* RESTRICTED LOGIN */}
         {!canEdit &&
-          restrictedGroup &&
+          isKhuddamTaskArea &&
           !restrictedAccessAuthorised &&
           !checkingRestrictedAccess && (
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3.5">
-              {(
-                restrictedGroup ===
-                  "lajna"
-                  ? !showLajnaLogin
-                  : !showAnsarLogin
-              ) ? (
+              {!showKhuddamLogin ? (
                 <div>
                   <div className="flex items-start gap-3">
                     <span
@@ -1343,7 +1163,7 @@ export default function UrgentTasksList({
                       </p>
 
                       <p className="mt-1 text-xs leading-5 text-slate-500">
-                        Sign in to raise urgent tasks for this area. Site Ops is alerted immediately and your registered phone is notified when the issue is resolved.
+                        Use your Khuddam task account to raise an urgent issue for this area. Site Ops is alerted immediately and the phone registered to your login is notified when the issue is resolved.
                       </p>
                     </div>
                   </div>
@@ -1353,18 +1173,9 @@ export default function UrgentTasksList({
                     onClick={() => {
                       resetLoginForm();
 
-                      if (
-                        restrictedGroup ===
-                        "lajna"
-                      ) {
-                        setShowLajnaLogin(
-                          true
-                        );
-                      } else {
-                        setShowAnsarLogin(
-                          true
-                        );
-                      }
+                      setShowKhuddamLogin(
+                        true
+                      );
                     }}
                     className={`mt-3 h-10 w-full rounded-xl text-sm font-bold text-white transition ${accent.button}`}
                   >
@@ -1376,9 +1187,8 @@ export default function UrgentTasksList({
                   onSubmit={(
                     event
                   ) =>
-                    void signInRestricted(
-                      event,
-                      restrictedGroup
+                    void signInKhuddam(
+                      event
                     )
                   }
                 >
@@ -1398,18 +1208,9 @@ export default function UrgentTasksList({
                       onClick={() => {
                         resetLoginForm();
 
-                        if (
-                          restrictedGroup ===
-                          "lajna"
-                        ) {
-                          setShowLajnaLogin(
-                            false
-                          );
-                        } else {
-                          setShowAnsarLogin(
-                            false
-                          );
-                        }
+                        setShowKhuddamLogin(
+                          false
+                        );
                       }}
                       className="flex h-8 w-8 items-center justify-center rounded-lg text-lg text-slate-400 transition hover:bg-white hover:text-slate-700"
                       aria-label={`Close ${accessLabel} login`}
@@ -1484,7 +1285,7 @@ export default function UrgentTasksList({
 
         {checkingRestrictedAccess &&
           !canEdit &&
-          restrictedGroup && (
+          isKhuddamTaskArea && (
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs font-medium text-slate-500">
               Checking {accessLabel} task access…
             </div>

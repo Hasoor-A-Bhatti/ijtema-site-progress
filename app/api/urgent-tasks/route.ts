@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getAnsarTaskSession } from "@/app/api/ansar-access/route";
-import { getLajnaTaskSession } from "@/app/api/lajna-access/route";
+import { getKhuddamTaskSession } from "@/app/api/khuddam-access/route";
 import { hasValidEditorSession } from "@/lib/auth/requireEditorSession";
 import {
   sendUrgentTaskCreatedSms,
@@ -11,14 +10,10 @@ import { supabaseServer } from "@/lib/supabaseServer";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type RestrictedGroup =
-  | "lajna"
-  | "ansar";
-
 interface AreaCheck {
   exists: boolean;
   name: string | null;
-  group: RestrictedGroup | null;
+  khuddamTaskArea: boolean;
   error: boolean;
 }
 
@@ -54,7 +49,7 @@ async function getAreaCheck(
     return {
       exists: false,
       name: null,
-      group: null,
+      khuddamTaskArea: false,
       error: true,
     };
   }
@@ -63,7 +58,7 @@ async function getAreaCheck(
     return {
       exists: false,
       name: null,
-      group: null,
+      khuddamTaskArea: false,
       error: false,
     };
   }
@@ -82,26 +77,22 @@ async function getAreaCheck(
       .trim()
       .toLowerCase();
 
-  const group:
-    RestrictedGroup | null =
+  const khuddamTaskArea =
     normalizedAreaId.startsWith(
       "lajna-"
     ) ||
     normalizedAreaId.startsWith(
       "nasirat-"
-    )
-      ? "lajna"
-      : normalizedAreaId.startsWith(
-            "ansar-"
-          )
-        ? "ansar"
-        : null;
+    ) ||
+    normalizedAreaId.startsWith(
+      "ansar-"
+    );
 
   return {
     exists: true,
     name:
       data.name,
-    group,
+    khuddamTaskArea,
     error: false,
   };
 }
@@ -313,62 +304,10 @@ export async function POST(
     string | null = null;
 
   if (!fullEditor) {
-    const [
-      lajnaSession,
-      ansarSession,
-    ] =
-      await Promise.all([
-        getLajnaTaskSession(),
-        getAnsarTaskSession(),
-      ]);
-
     if (
-      areaCheck.group ===
-        "lajna"
+      !areaCheck
+        .khuddamTaskArea
     ) {
-      if (!lajnaSession) {
-        return NextResponse.json(
-          {
-            error:
-              "Khuddam task access is required to raise urgent tasks within Khuddam areas.",
-          },
-          {
-            status: 401,
-          }
-        );
-      }
-
-      raisedByUsername =
-        lajnaSession.username;
-
-      raisedByPhone =
-        lajnaSession.phone;
-    } else if (
-      areaCheck.group ===
-        "ansar"
-    ) {
-      if (!ansarSession) {
-        return NextResponse.json(
-          {
-            error:
-              "Atfal task access is required to raise urgent tasks within Atfal areas.",
-          },
-          {
-            status: 401,
-          }
-        );
-      }
-
-      raisedByUsername =
-        ansarSession.username;
-
-      raisedByPhone =
-        ansarSession.phone;
-    } else {
-      /*
-       * Narrow sessions do not grant access
-       * outside their own areas.
-       */
       return NextResponse.json(
         {
           error:
@@ -379,6 +318,27 @@ export async function POST(
         }
       );
     }
+
+    const khuddamSession =
+      await getKhuddamTaskSession();
+
+    if (!khuddamSession) {
+      return NextResponse.json(
+        {
+          error:
+            "Khuddam task access is required to raise urgent tasks for this area.",
+        },
+        {
+          status: 401,
+        }
+      );
+    }
+
+    raisedByUsername =
+      khuddamSession.username;
+
+    raisedByPhone =
+      khuddamSession.phone;
   }
 
   const {
@@ -425,8 +385,8 @@ export async function POST(
 
   /*
    * Notify the site/admin phone only when the
-   * task was raised through restricted Lajna /
-   * Ansar access.
+   * task was raised through universal
+   * Khuddam task access.
    *
    * Full editor-created tasks deliberately do
    * not trigger this alert.

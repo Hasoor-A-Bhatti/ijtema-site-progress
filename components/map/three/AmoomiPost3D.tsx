@@ -70,140 +70,6 @@ function getMarkerLabel(
     .toUpperCase();
 }
 
-
-function SecurityBreachPulse3D() {
-  const ringRef =
-    useRef<THREE.Mesh>(
-      null
-    );
-
-  const glowRef =
-    useRef<THREE.Mesh>(
-      null
-    );
-
-  useFrame(
-    ({ clock }) => {
-      const t =
-        clock.getElapsedTime();
-
-      const pulse =
-        (Math.sin(
-          t * 7
-        ) +
-          1) /
-        2;
-
-      if (
-        ringRef.current
-      ) {
-        const scale =
-          0.95 +
-          pulse * 0.65;
-
-        ringRef.current.scale.set(
-          scale,
-          scale,
-          scale
-        );
-
-        const material =
-          ringRef.current
-            .material as
-            THREE.MeshBasicMaterial;
-
-        material.opacity =
-          0.92 -
-          pulse * 0.58;
-      }
-
-      if (
-        glowRef.current
-      ) {
-        const scale =
-          0.85 +
-          pulse * 0.48;
-
-        glowRef.current.scale.set(
-          scale,
-          scale,
-          scale
-        );
-
-        const material =
-          glowRef.current
-            .material as
-            THREE.MeshBasicMaterial;
-
-        material.opacity =
-          0.48 -
-          pulse * 0.22;
-      }
-    }
-  );
-
-  return (
-    <>
-      <mesh
-        ref={glowRef}
-        position={[
-          0,
-          0.025,
-          0,
-        ]}
-        rotation={[
-          -Math.PI / 2,
-          0,
-          0,
-        ]}
-      >
-        <circleGeometry
-          args={[
-            1.08,
-            48,
-          ]}
-        />
-
-        <meshBasicMaterial
-          color="#450A0A"
-          transparent
-          opacity={0.42}
-          depthWrite={false}
-        />
-      </mesh>
-
-      <mesh
-        ref={ringRef}
-        position={[
-          0,
-          0.035,
-          0,
-        ]}
-        rotation={[
-          -Math.PI / 2,
-          0,
-          0,
-        ]}
-      >
-        <ringGeometry
-          args={[
-            0.76,
-            1.12,
-            48,
-          ]}
-        />
-
-        <meshBasicMaterial
-          color="#7F1D1D"
-          transparent
-          opacity={0.86}
-          depthWrite={false}
-        />
-      </mesh>
-    </>
-  );
-}
-
 export default function AmoomiPost3D({
   post,
   selected = false,
@@ -218,7 +84,81 @@ export default function AmoomiPost3D({
           "security_breach"
     );
 
+  const breachRingRef =
+    useRef<THREE.Mesh>(
+      null
+    );
 
+  const breachGlowRef =
+    useRef<THREE.Mesh>(
+      null
+    );
+
+  useFrame(
+    ({ clock }) => {
+      if (
+        !securityBreach
+      ) {
+        return;
+      }
+
+      const t =
+        clock.getElapsedTime();
+
+      const pulse =
+        (Math.sin(
+          t * 7
+        ) +
+          1) /
+        2;
+
+      if (
+        breachRingRef.current
+      ) {
+        const scale =
+          0.95 +
+          pulse * 0.65;
+
+        breachRingRef.current.scale.set(
+          scale,
+          scale,
+          scale
+        );
+
+        const material =
+          breachRingRef.current
+            .material as
+            THREE.MeshBasicMaterial;
+
+        material.opacity =
+          0.9 -
+          pulse * 0.55;
+      }
+
+      if (
+        breachGlowRef.current
+      ) {
+        const scale =
+          0.85 +
+          pulse * 0.45;
+
+        breachGlowRef.current.scale.set(
+          scale,
+          scale,
+          scale
+        );
+
+        const material =
+          breachGlowRef.current
+            .material as
+            THREE.MeshBasicMaterial;
+
+        material.opacity =
+          0.42 -
+          pulse * 0.18;
+      }
+    }
+  );
 
   if (
     post.x === null ||
@@ -263,6 +203,12 @@ export default function AmoomiPost3D({
   const urgent =
     post.unresolvedUrgentCount >
     0;
+
+  const hasShiftIncharge =
+    post.officers.some(
+      (officer) =>
+        officer.is_shift_incharge
+    );
 
   const bodyColour =
     isResponse
@@ -481,8 +427,95 @@ export default function AmoomiPost3D({
             decay={2}
           />
 
-          <SecurityBreachPulse3D />
+          <mesh
+            ref={
+              breachGlowRef
+            }
+            position={[
+              0,
+              0.025,
+              0,
+            ]}
+            rotation={[
+              -Math.PI / 2,
+              0,
+              0,
+            ]}
+          >
+            <circleGeometry
+              args={[
+                1.08,
+                48,
+              ]}
+            />
+
+            <meshBasicMaterial
+              color="#450A0A"
+              transparent
+              opacity={0.38}
+              depthWrite={
+                false
+              }
+            />
+          </mesh>
+
+          <mesh
+            ref={
+              breachRingRef
+            }
+            position={[
+              0,
+              0.035,
+              0,
+            ]}
+            rotation={[
+              -Math.PI / 2,
+              0,
+              0,
+            ]}
+          >
+            <ringGeometry
+              args={[
+                0.76,
+                1.12,
+                48,
+              ]}
+            />
+
+            <meshBasicMaterial
+              color="#7F1D1D"
+              transparent
+              opacity={0.82}
+              depthWrite={
+                false
+              }
+            />
+          </mesh>
         </>
+      )}
+
+      {/* Shift Incharge badge */}
+      {!hideLabels &&
+        hasShiftIncharge && (
+        <Html
+          position={[
+            -0.42,
+            0.78,
+            0,
+          ]}
+          center
+          distanceFactor={18}
+          transform
+          sprite
+          style={{
+            pointerEvents:
+              "none",
+          }}
+        >
+          <div className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-amber-300 bg-black text-[12px] font-black leading-none text-amber-300 shadow-lg">
+            ♛
+          </div>
+        </Html>
       )}
 
       {/* Officer count */}
