@@ -9,6 +9,8 @@ import {
 } from "react";
 
 import { useEditorAccess } from "@/components/editor/EditorAccessProvider";
+import { infrastructureLines } from "@/data/infrastructureLines";
+import { siteAreas } from "@/data/siteAreas";
 
 interface UrgentTask {
   id: string;
@@ -223,7 +225,29 @@ export default function UrgentTasksList({
    * Stable legacy IDs are deliberately retained:
    * lajna-/nasirat- = current Khuddam areas
    * ansar-         = current Atfal areas
+   *
+   * All fencing and tracking features are also
+   * included, including generic IDs such as
+   * service-road-tracking or boneyard-road-fence.
    */
+  const localAreaType =
+    infrastructureLines.find(
+      (area) =>
+        area.id === areaId
+    )?.type ??
+    siteAreas.find(
+      (area) =>
+        area.id === areaId
+    )?.type;
+
+  const isInfrastructureTaskArea =
+    localAreaType ===
+      "fence" ||
+    localAreaType ===
+      "metal_tracking" ||
+    localAreaType ===
+      "rubber_tracking";
+
   const isKhuddamTaskArea =
     normalizedAreaId.startsWith(
       "lajna-"
@@ -233,7 +257,8 @@ export default function UrgentTasksList({
     ) ||
     normalizedAreaId.startsWith(
       "ansar-"
-    );
+    ) ||
+    isInfrastructureTaskArea;
 
   const canAddTask =
     canEdit ||

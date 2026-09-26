@@ -29,6 +29,52 @@ function formatTime(date: Date | null) {
   }).format(date);
 }
 
+function formatIssueTime(
+  value: string | null
+) {
+  if (!value) return "—";
+
+  return new Intl.DateTimeFormat(
+    "en-GB",
+    {
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone:
+        "Europe/London",
+    }
+  ).format(
+    new Date(value)
+  );
+}
+
+function formatResolutionTime(
+  minutes: number | null
+) {
+  if (minutes === null) {
+    return "Ongoing";
+  }
+
+  if (minutes < 60) {
+    return `${minutes} min`;
+  }
+
+  const hours =
+    Math.floor(
+      minutes / 60
+    );
+
+  const remainingMinutes =
+    minutes % 60;
+
+  if (
+    remainingMinutes === 0
+  ) {
+    return `${hours}h`;
+  }
+
+  return `${hours}h ${remainingMinutes}m`;
+}
+
 function formatAreaType(areaType: string) {
   if (areaType === "metal_tracking") return "Metal tracking";
   if (areaType === "rubber_tracking") return "Rubber tracking";
@@ -385,6 +431,184 @@ export default function SiteSummary({
       </section>
 
       {/* URGENT + EQUIPMENT */}
+      {/* TODAY'S URGENT ISSUES */}
+      <section className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+          <div>
+            <p className="text-sm font-semibold text-slate-950">
+              Today&apos;s Urgent Issues
+            </p>
+
+            <p className="mt-1 text-sm text-slate-500">
+              All issues raised today, including resolved and outstanding tasks.
+            </p>
+          </div>
+
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
+            {metrics.dailyIssues.length} issue{metrics.dailyIssues.length === 1 ? "" : "s"}
+          </span>
+        </div>
+
+        {metrics.dailyIssues.length === 0 ? (
+          <div className="px-5 py-10 text-center">
+            <p className="text-sm font-medium text-slate-700">
+              No urgent issues have been raised today.
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* MOBILE */}
+            <div className="divide-y divide-slate-100 md:hidden">
+              {metrics.dailyIssues.map((issue) => (
+                <div
+                  key={issue.id}
+                  className="p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-slate-950">
+                        {issue.areaName}
+                      </p>
+
+                      <p className="mt-1 text-sm leading-5 text-slate-600">
+                        {issue.taskText}
+                      </p>
+                    </div>
+
+                    <span
+                      className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold ${
+                        issue.completed
+                          ? "bg-emerald-50 text-emerald-700"
+                          : "bg-red-50 text-red-700"
+                      }`}
+                    >
+                      {issue.completed ? "Resolved" : "Open"}
+                    </span>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-3 gap-2">
+                    <div className="rounded-xl bg-slate-50 p-2.5">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                        Raised
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-slate-800">
+                        {formatIssueTime(issue.createdAt)}
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl bg-slate-50 p-2.5">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                        Resolved
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-slate-800">
+                        {formatIssueTime(issue.resolvedAt)}
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl bg-slate-50 p-2.5">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                        Time Taken
+                      </p>
+                      <p
+                        className={`mt-1 text-sm font-bold ${
+                          issue.resolutionMinutes === null
+                            ? "text-red-600"
+                            : "text-emerald-700"
+                        }`}
+                      >
+                        {formatResolutionTime(issue.resolutionMinutes)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* TABLET / DESKTOP */}
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full min-w-[850px] border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 text-left">
+                    <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      Area
+                    </th>
+                    <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      Issue
+                    </th>
+                    <th className="whitespace-nowrap px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      Raised
+                    </th>
+                    <th className="whitespace-nowrap px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      Resolved
+                    </th>
+                    <th className="whitespace-nowrap px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      Time Taken
+                    </th>
+                    <th className="px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      Status
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-slate-100">
+                  {metrics.dailyIssues.map((issue) => (
+                    <tr
+                      key={issue.id}
+                      className="align-top"
+                    >
+                      <td className="whitespace-nowrap px-5 py-4">
+                        <p className="text-sm font-semibold text-slate-950">
+                          {issue.areaName}
+                        </p>
+                        <p className="mt-0.5 text-xs text-slate-400">
+                          {formatAreaType(issue.areaType)}
+                        </p>
+                      </td>
+
+                      <td className="max-w-md px-5 py-4 text-sm leading-5 text-slate-700">
+                        {issue.taskText}
+                      </td>
+
+                      <td className="whitespace-nowrap px-5 py-4 text-sm font-medium text-slate-700">
+                        {formatIssueTime(issue.createdAt)}
+                      </td>
+
+                      <td className="whitespace-nowrap px-5 py-4 text-sm font-medium text-slate-700">
+                        {formatIssueTime(issue.resolvedAt)}
+                      </td>
+
+                      <td className="whitespace-nowrap px-5 py-4">
+                        <span
+                          className={`text-sm font-bold ${
+                            issue.resolutionMinutes === null
+                              ? "text-red-600"
+                              : "text-emerald-700"
+                          }`}
+                        >
+                          {formatResolutionTime(issue.resolutionMinutes)}
+                        </span>
+                      </td>
+
+                      <td className="whitespace-nowrap px-5 py-4">
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-xs font-bold ${
+                            issue.completed
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "bg-red-50 text-red-700"
+                          }`}
+                        >
+                          {issue.completed ? "Resolved" : "Open"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </section>
+
       <section className="mt-5 grid gap-5 lg:grid-cols-2">
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 p-5">

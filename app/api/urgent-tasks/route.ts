@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 
 import { getKhuddamTaskSession } from "@/app/api/khuddam-access/route";
 import { hasValidEditorSession } from "@/lib/auth/requireEditorSession";
+import { infrastructureLines } from "@/data/infrastructureLines";
+import { siteAreas } from "@/data/siteAreas";
 import {
   sendUrgentTaskCreatedSms,
 } from "@/lib/sms/urgentTaskSms";
@@ -15,6 +17,35 @@ interface AreaCheck {
   name: string | null;
   khuddamTaskArea: boolean;
   error: boolean;
+}
+
+function getCurrentAreaName(
+  areaId: string,
+  fallbackName: string | null
+) {
+  return (
+    siteAreas.find(
+      (area) =>
+        area.id === areaId
+    )?.name ??
+    infrastructureLines.find(
+      (area) =>
+        area.id === areaId
+    )?.name ??
+    fallbackName
+  );
+}
+
+function isInfrastructureType(
+  areaType: string | null
+) {
+  return (
+    areaType === "fence" ||
+    areaType ===
+      "metal_tracking" ||
+    areaType ===
+      "rubber_tracking"
+  );
 }
 
 /*
@@ -86,12 +117,18 @@ async function getAreaCheck(
     ) ||
     normalizedAreaId.startsWith(
       "ansar-"
+    ) ||
+    isInfrastructureType(
+      data.area_type
     );
 
   return {
     exists: true,
     name:
-      data.name,
+      getCurrentAreaName(
+        data.id,
+        data.name
+      ),
     khuddamTaskArea,
     error: false,
   };

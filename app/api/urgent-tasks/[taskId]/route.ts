@@ -1,11 +1,30 @@
 import { NextResponse } from "next/server";
 
 import { hasValidEditorSession } from "@/lib/auth/requireEditorSession";
+import { infrastructureLines } from "@/data/infrastructureLines";
+import { siteAreas } from "@/data/siteAreas";
 import { sendUrgentTaskResolvedSms } from "@/lib/sms/urgentTaskSms";
 import { supabaseServer } from "@/lib/supabaseServer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+function getCurrentAreaName(
+  areaId: string,
+  fallbackName: string
+) {
+  return (
+    siteAreas.find(
+      (area) =>
+        area.id === areaId
+    )?.name ??
+    infrastructureLines.find(
+      (area) =>
+        area.id === areaId
+    )?.name ??
+    fallbackName
+  );
+}
 
 interface RouteContext {
   params: Promise<{
@@ -21,6 +40,7 @@ interface ExistingTask {
   raised_by_username: string | null;
   raised_by_phone: string | null;
   completion_sms_sent_at: string | null;
+  resolved_at: string | null;
 }
 
 /*
@@ -107,7 +127,7 @@ export async function PATCH(
     await supabaseServer
       .from("urgent_tasks")
       .select(
-        "id, area_id, task_text, completed, raised_by_username, raised_by_phone, completion_sms_sent_at"
+        "id, area_id, task_text, completed, raised_by_username, raised_by_phone, completion_sms_sent_at, resolved_at"
       )
       .eq(
         "id",
@@ -155,6 +175,13 @@ export async function PATCH(
     !existingTask.completed &&
     body.completed;
 
+  const isReopened =
+    existingTask.completed &&
+    !body.completed;
+
+  const now =
+    new Date().toISOString();
+
   /*
    * First save the operational task state.
    * SMS failure must never prevent the site team
@@ -172,14 +199,29 @@ export async function PATCH(
         completed:
           body.completed,
         updated_at:
-          new Date().toISOString(),
+          now,
+
+        /*
+         * Store the actual resolution timestamp independently
+         * of SMS delivery. This applies equally to tasks raised
+         * by an admin/editor and tasks raised through a portal.
+         *
+         * If a task is reopened, clear resolved_at so the next
+         * genuine resolution receives a fresh timestamp.
+         */
+        resolved_at:
+          isNewCompletion
+            ? now
+            : isReopened
+              ? null
+              : existingTask.resolved_at,
       })
       .eq(
         "id",
         cleanTaskId
       )
       .select(
-        "id, area_id, task_text, completed, created_at, updated_at"
+        "id, area_id, task_text, completed, created_at, updated_at, resolved_at"
       )
       .single();
 
@@ -255,7 +297,10 @@ export async function PATCH(
             existingTask
               .raised_by_phone,
           areaName:
-            area.name,
+            getCurrentAreaName(
+              existingTask.area_id,
+              area.name
+            ),
           taskText:
             existingTask
               .task_text,

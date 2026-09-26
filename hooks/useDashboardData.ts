@@ -6,6 +6,8 @@ import {
   ALL_STATUS_ORDER,
   getStatusOrder,
 } from "@/config/statuses";
+import { infrastructureLines } from "@/data/infrastructureLines";
+import { siteAreas } from "@/data/siteAreas";
 import { supabase } from "@/lib/supabase";
 
 import type {
@@ -25,6 +27,8 @@ interface UrgentTaskRow {
   area_id: string;
   task_text: string;
   completed: boolean;
+  created_at: string;
+  resolved_at: string | null;
 }
 
 interface EquipmentRow {
@@ -58,6 +62,18 @@ export interface UrgentIssueSummary {
   areaName: string;
   areaType: string;
   taskText: string;
+}
+
+export interface DailyUrgentIssue {
+  id: string;
+  areaId: string;
+  areaName: string;
+  areaType: string;
+  taskText: string;
+  completed: boolean;
+  createdAt: string;
+  resolvedAt: string | null;
+  resolutionMinutes: number | null;
 }
 
 export interface EquipmentAttentionArea {
@@ -97,6 +113,7 @@ export interface DashboardMetrics {
   attentionAreas: AttentionArea[];
   inspectionQueue: InspectionItem[];
   urgentIssues: UrgentIssueSummary[];
+  dailyIssues: DailyUrgentIssue[];
   equipmentAttention: EquipmentAttentionArea[];
 
   workstreams: WorkstreamMetric[];
@@ -132,6 +149,7 @@ const EMPTY_METRICS: DashboardMetrics = {
   attentionAreas: [],
   inspectionQueue: [],
   urgentIssues: [],
+  dailyIssues: [],
   equipmentAttention: [],
   workstreams: [],
 };
@@ -200,6 +218,85 @@ const WORKSTREAMS: Array<{
   },
 ];
 
+function getLondonDateKey(
+  value: string | Date
+) {
+  return new Intl.DateTimeFormat(
+    "en-CA",
+    {
+      timeZone: "Europe/London",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }
+  ).format(
+    typeof value === "string"
+      ? new Date(value)
+      : value
+  );
+}
+
+
+const CURRENT_FEATURES = [
+  ...siteAreas,
+  ...infrastructureLines,
+];
+
+const CURRENT_FEATURE_MAP =
+  new Map(
+    CURRENT_FEATURES.map(
+      (feature) => [
+        feature.id,
+        {
+          name: feature.name,
+          areaType: feature.type,
+        },
+      ]
+    )
+  );
+
+function getCurrentAreaName(
+  areaId: string,
+  databaseName: string
+) {
+  const current =
+    CURRENT_FEATURE_MAP.get(
+      areaId
+    );
+
+  if (current?.name) {
+    return current.name;
+  }
+
+  /*
+   * Historical/deleted rows may still exist in
+   * Supabase because urgent-task history refers
+   * to their stable IDs. Do not expose obsolete
+   * Lajna / Ansar wording on the dashboard.
+   */
+  return databaseName
+    .replace(
+      /^Lajna\b/i,
+      "Khuddam"
+    )
+    .replace(
+      /^Ansar\b/i,
+      "Atfal"
+    );
+}
+
+function getCurrentAreaType(
+  areaId: string,
+  databaseType: string
+) {
+  return (
+    CURRENT_FEATURE_MAP.get(
+      areaId
+    )?.areaType ??
+    databaseType
+  );
+}
+
 export default function useDashboardData() {
   const [metrics, setMetrics] =
     useState<DashboardMetrics>(EMPTY_METRICS);
@@ -223,7 +320,9 @@ export default function useDashboardData() {
 
         supabase
           .from("urgent_tasks")
-          .select("id, area_id, task_text, completed"),
+          .select(
+            "id, area_id, task_text, completed, created_at, resolved_at"
+          ),
 
         supabase
           .from("equipment_requirements")
@@ -236,7 +335,26 @@ export default function useDashboardData() {
       if (urgentResult.error) throw urgentResult.error;
       if (equipmentResult.error) throw equipmentResult.error;
 
-      const areas = (areasResult.data ?? []) as SiteAreaRow[];
+      const databaseAreas =
+        (areasResult.data ?? []) as SiteAreaRow[];
+
+      const areas: SiteAreaRow[] =
+        databaseAreas.map(
+          (area) => ({
+            ...area,
+            name:
+              getCurrentAreaName(
+                area.id,
+                area.name
+              ),
+            area_type:
+              getCurrentAreaType(
+                area.id,
+                area.area_type
+              ),
+          })
+        );
+
       const urgentTasks = (urgentResult.data ?? []) as UrgentTaskRow[];
       const equipment = (equipmentResult.data ?? []) as EquipmentRow[];
 
@@ -347,6 +465,81 @@ export default function useDashboardData() {
         })
         .sort((a, b) => a.areaName.localeCompare(b.areaName));
 
+      const todayLondon =
+        getLondonDateKey(new Date());
+
+      const dailyIssues: DailyUrgentIssue[] =
+        urgentTasks
+          .filter(
+            (task) =>
+              getLondonDateKey(
+                task.created_at
+              ) === todayLondon
+          )
+          .map((task) => {
+            const area =
+              areaMap.get(task.area_id);
+
+            const createdMs =
+              new Date(
+                task.created_at
+              ).getTime();
+
+            const resolvedMs =
+              task.resolved_at
+                ? new Date(
+                    task.resolved_at
+                  ).getTime()
+                : null;
+
+            const resolutionMinutes =
+              resolvedMs !== null &&
+              Number.isFinite(
+                createdMs
+              ) &&
+              Number.isFinite(
+                resolvedMs
+              )
+                ? Math.max(
+                    0,
+                    Math.round(
+                      (resolvedMs -
+                        createdMs) /
+                        60000
+                    )
+                  )
+                : null;
+
+            return {
+              id: task.id,
+              areaId: task.area_id,
+              areaName:
+                area?.name ??
+                task.area_id,
+              areaType:
+                area?.area_type ??
+                "other",
+              taskText:
+                task.task_text,
+              completed:
+                task.completed,
+              createdAt:
+                task.created_at,
+              resolvedAt:
+                task.resolved_at,
+              resolutionMinutes,
+            };
+          })
+          .sort(
+            (a, b) =>
+              new Date(
+                b.createdAt
+              ).getTime() -
+              new Date(
+                a.createdAt
+              ).getTime()
+          );
+
       const equipmentAttention = Array.from(
         equipmentByArea.entries()
       )
@@ -424,6 +617,7 @@ export default function useDashboardData() {
         attentionAreas,
         inspectionQueue,
         urgentIssues,
+        dailyIssues,
         equipmentAttention,
         workstreams,
       });
